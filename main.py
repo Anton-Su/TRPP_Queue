@@ -1,8 +1,26 @@
-# This is a sample Python script. Antuan was here. Zurab Shottovish was not.
+import asyncio
+from os import getenv
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher
+from aiogram.filters import Command
+from aiogram.types import Message
+load_dotenv()
+TOKEN = getenv("BOT_TOKEN")
+
+dp = Dispatcher()
 
 
-def print_hi(name):
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+# Command handler
+@dp.message(Command("start"))
+async def command_start_handler(message: Message) -> None:
+    await message.answer("Hello! I'm a bot created with aiogram.")
 
-if __name__ == '__main__':
-    print_hi('PyCharm')
+
+# Run the bot
+async def main() -> None:
+    bot = Bot(token=TOKEN)
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
