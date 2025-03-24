@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks
 from update import get_schedule
 
+
 load_dotenv() # получаю значение токена из специального файла
 TOKEN = getenv("BOT_TOKEN")
 dp = Dispatcher()
@@ -18,8 +19,6 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 
 
-def tick():
-    print('Tick! The time is: %s' % datetime.now())
 
 kb = ReplyKeyboardMarkup( # Создаем кнопки
     keyboard=[
@@ -32,7 +31,7 @@ kb = ReplyKeyboardMarkup( # Создаем кнопки
 
 @dp.message(Command("start")) # Command handler
 async def command_start_handler(message: Message) -> None:
-    await message.answer("Привет! Я бот, который регулирует процесс очереди, а также предоставляет возможность оставлять рецензии", reply_markup=kb)
+    await message.answer("Привет! Я бот, который регулирует процесс очереди", reply_markup=kb)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
@@ -49,7 +48,9 @@ async def echo_message(message: Message):
 
 async def main() -> None: # Run the bot
     scheduler = AsyncIOScheduler()
+    scheduler.add_job(form_correctslinks, 'cron', hour=15, minute=15)
     scheduler.add_job(get_schedule, 'cron', hour=0, minute=30)
+    # scheduler.add_job(get_schedule, 'cron', day=15, hour=0, minute=30) клин данных условно раз в месяц
     scheduler.add_job(form_correctslinks, 'cron', month=1, day=10, hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=9, day=10, hour=0, minute=30)
     scheduler.start()
@@ -58,4 +59,3 @@ async def main() -> None: # Run the bot
 
 if __name__ == "__main__":
     asyncio.run(main())
-

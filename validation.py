@@ -1,13 +1,17 @@
 from icalendar import Calendar
 import requests
+import sqlite3
 
 
 output_file = "valid_schedules.txt" # пока что будем сохранять типа в файле, потом в БД переведу
 base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
 
 
-def form_correctslinks(stop=15000):
+def form_correctslinks(stop=10000):
     f = open(output_file, "w", encoding="utf-8")
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM Session;")
     for i in range(stop):
         url = f"{base_url}{i:03d}"  # Формируем URL
         try:
@@ -20,9 +24,12 @@ def form_correctslinks(stop=15000):
                     schedule = schedule_info[0]["iCalContent"]
                     realschedule = Calendar.from_ical(schedule)
                     if len(realschedule.walk()) > 5: # расписание реально дано
-                        f.write(group + ':' + url + '\n')
+                        cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)",(group, url))
+                        f.write(group + '?' + url + '\n')
             else:
                 print(f"⚠ Ошибка {response.status_code} для {url}")
         except requests.RequestException as e:
             print(f"❌ Ошибка запроса {url}: {e}")
+    conn.commit()
+    conn.close()
     f.close()

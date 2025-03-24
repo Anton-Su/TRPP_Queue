@@ -60,5 +60,3 @@ def generate_schedule(start_date, end_date, description, teacher, location):
         print((start_date, end_date, description, teacher, location))
         start_date += timedelta(weeks=2)  # Добавляем 2 недели
         end_date += timedelta(weeks=2)
-
-print("Расписание до конца семестра сохранено в 'полное_расписание.txt'")
