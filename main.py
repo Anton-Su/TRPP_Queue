@@ -119,7 +119,9 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     cursor.execute("SELECT 1 FROM Timetable WHERE GroupName = ?", (user_data['group'],))
     exists = cursor.fetchone()
     if not exists: # подгрузить расписание
-        get_schedule(user_data['group'])
+        cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
+        url = cursor.fetchone()[0]
+        get_schedule(url)
 
     conn.close()
 
