@@ -11,7 +11,7 @@ from validation import form_correctslinks
 from update import get_schedule
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
+from update import generate_schedule
 import sqlite3
 
 load_dotenv() # получаю значение токена из специального файла
@@ -74,7 +74,7 @@ async def register(message: types.Message, state: FSMContext):
 
 @dp.message(RegisterState.group) # Обработка ввода группы
 async def process_group(message: types.Message, state: FSMContext):
-    await state.update_data(group=message.text)
+    await state.update_data(group=message.text.upper())
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),))
@@ -84,7 +84,6 @@ async def process_group(message: types.Message, state: FSMContext):
         await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.")
         await state.clear()
         return
-    print(url[0])
     await message.answer("Введите ваше имя:")
     await state.set_state(RegisterState.name)
 
@@ -92,7 +91,7 @@ async def process_group(message: types.Message, state: FSMContext):
 
 @dp.message(RegisterState.name) # Обработка ввода имени
 async def process_name(message: types.Message, state: FSMContext):
-    await state.update_data(name=message.text)
+    await state.update_data(name=message.text.capitalize())
     await message.answer("Введите вашу фамилию:")
     await state.set_state(RegisterState.surname)
 
@@ -100,7 +99,7 @@ async def process_name(message: types.Message, state: FSMContext):
 
 @dp.message(RegisterState.surname) # Обработка ввода фамилии
 async def process_surname(message: types.Message, state: FSMContext):
-    await state.update_data(surname=message.text)
+    await state.update_data(surname=message.text.capitalize())
     await message.answer("Введите ваше отчество (если нет, напишите '-'): ")
     await state.set_state(RegisterState.middle_name)
 
@@ -108,7 +107,7 @@ async def process_surname(message: types.Message, state: FSMContext):
 @dp.message(RegisterState.middle_name) # Обработка ввода отчества и сохранение в БД
 async def process_middle_name(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
-    middle_name = message.text if message.text != "-" else None
+    middle_name = message.text.capitalize() if message.text != "-" else None
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     cursor.execute("""
@@ -117,18 +116,22 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                    (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name)
                    )
     conn.commit()
+    cursor.execute("SELECT 1 FROM Timetable WHERE GroupName = ?", (user_data['group'],))
+    exists = cursor.fetchone()
+    if not exists: # подгрузить расписание
+        print(1111)
+
+
     conn.close()
+
     await message.answer("✅ Регистрация завершена!")
     await state.clear()
-
-
 
 
 @dp.message() # Функция для обработки любого текстового сообщения
 async def echo_message(message: Message):
     scheduler.add_job(dindin, 'cron', hour=20, minute=2)
     await message.answer(f"Вы написали: {message.text}")
-
 
 
 async def main() -> None: # Run the bot
