@@ -62,13 +62,13 @@ async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM Users WHERE ID = ?", (user_id,))
-    id = cursor.fetchone()
+    cursor.execute("SELECT Name FROM Users WHERE ID = ?", (user_id,))
+    Name = cursor.fetchone()
     if not id:
         await message.answer("Введите вашу группу:")
         await state.set_state(RegisterState.group)
     else:
-        await message.answer("Вы уже зарегистрированы.")
+        await message.answer(f"Вы уже зарегистрированы, {Name[0]}.")
     conn.close()
 
 
@@ -119,8 +119,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     cursor.execute("SELECT 1 FROM Timetable WHERE GroupName = ?", (user_data['group'],))
     exists = cursor.fetchone()
     if not exists: # подгрузить расписание
-        print(1111)
-
+        get_schedule(user_data['group'])
 
     conn.close()
 
@@ -136,7 +135,7 @@ async def echo_message(message: Message):
 
 async def main() -> None: # Run the bot
     scheduler.add_job(form_correctslinks, 'cron', hour=15, minute=15)
-    scheduler.add_job(get_schedule, 'cron', hour=0, minute=30)
+    #scheduler.add_job(get_schedule, 'cron', hour=0, minute=30)
     # scheduler.add_job(get_schedule, 'cron', day=15, hour=0, minute=30) клин данных условно раз в месяц
     scheduler.add_job(form_correctslinks, 'cron', month=1, day=10, hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=9, day=10, hour=0, minute=30)
