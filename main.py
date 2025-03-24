@@ -64,7 +64,7 @@ async def register(message: types.Message, state: FSMContext):
     cursor = conn.cursor()
     cursor.execute("SELECT Name FROM Users WHERE ID = ?", (user_id,))
     Name = cursor.fetchone()
-    if not id:
+    if not Name:
         await message.answer("Введите вашу группу:")
         await state.set_state(RegisterState.group)
     else:
