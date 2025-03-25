@@ -4,16 +4,15 @@ from datetime import datetime, timedelta
 import asyncio
 from os import getenv
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, \
+    CallbackQuery
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks
-# from update import get_schedule
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from update import generate_schedule
 import sqlite3
 
 load_dotenv() # получаю значение токена из специального файла
@@ -152,6 +151,104 @@ class RegisterState(StatesGroup):
     middle_name = State()
 
 
+@dp.callback_query(F.data.startswith("back_to_calendar_"))
+async def back_to_calendar(callback: CallbackQuery):
+    selected_date = callback.data.split("_")[3]  # Извлекаем выбранную дату (формат YYYY-MM-DD)
+    user_id = callback.from_user.id
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    group = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()  # Получаем группу пользователя
+    if not group:
+        await callback.answer("Вы не зарегистрированы!")
+        return
+    raspisanie = cursor.execute("SELECT DISTINCT Month, Day FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC", (group[0],)).fetchall()
+    conn.close()
+
+    keyboard = generate_calendar(raspisanie)
+    await callback.message.edit_text("Определитесь с датой:", reply_markup=keyboard)
+
+
+# Функция для генерации клавиатуры-календаря
+def generate_calendar(raspisanie):
+    days_of_week = {
+        "Monday": "Понедельник",
+        "Tuesday": "Вторник",
+        "Wednesday": "Среда",
+        "Thursday": "Четверг",
+        "Friday": "Пятница",
+        "Saturday": "Суббота",
+        "Sunday": "Воскресенье"
+    }
+    keyboard = []
+    for raspisanieday in raspisanie:
+        current_date = datetime.now()
+        day = datetime(current_date.year, raspisanieday[0], raspisanieday[1])
+        day_name = days_of_week[day.strftime("%A")]  # Получаем русское название
+        button = InlineKeyboardButton(
+            text=f"{day.strftime('%d.%m.%Y')} ({day_name})",
+            callback_data=f"date_{day.strftime('%Y-%m-%d')}"
+        )
+        keyboard.append([button])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+@dp.message(Command("show"))
+async def command_start_handler(message: types.Message) -> None:
+    user_id = message.from_user.id
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    group = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?",(user_id,)).fetchone() # Получаем группу пользователя
+    if not group:
+        await message.answer("Вы не зарегистрированы!")
+        return
+    raspisanie = cursor.execute("SELECT DISTINCT Month, DAY FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC", (group[0],)).fetchall()
+    keyboard = generate_calendar(raspisanie)
+    conn.close()
+    await message.answer("Определитесь с датой:", reply_markup=keyboard)
+
+
+@dp.callback_query(F.data.startswith("date_")) # Обработчик выбора даты
+async def show_schedule(callback: CallbackQuery):
+    selected_date = callback.data.split("_")[1]  # Дата в формате YYYY-MM-DD
+    user_id = callback.from_user.id
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    groupName = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
+    subjects = cursor.execute("""
+        SELECT Task, Month, Day, Hour, Minute, Location
+        FROM Timetable
+        WHERE GroupName = ? AND Month = ? AND Day = ?
+    """, (groupName, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
+    conn.close()
+    keyboard = []
+    for subject in subjects:
+        task, month, day, hour, minute, location = subject
+        # Формируем текст кнопки с названием предмета, временем и местом
+        text = f"{location} {str(hour).ljust(2, '0')}:{str(minute).ljust(2, '0')} - {task}"
+        button = InlineKeyboardButton(
+            text=text[0:60],  # Реальные данные предмета
+            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}"  # Передаем в callback_data название предмета и дату
+        )
+        keyboard.append([button])
+    keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_calendar_{selected_date}")])
+    await callback.message.edit_text("Выберите предмет:",
+                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+
+
+@dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
+async def handle_subject(callback: CallbackQuery):
+    _, month, day, hour, minute, location = callback.data.split("_")
+    # Для примера выводим выбранный предмет и дату
+    await callback.answer(f"Вы выбрали предмет: {month} {day} {hour}:{minute} {location}")
+    # Можно добавить логику для отображения дополнительной информации о предмете
+    # или выполнить другие действия, например, показать описание, материалы и т. д.
+    keyboard = [
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]
+    ]
+    await callback.message.edit_text("Выберите предмет:",
+                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+
+    # await callback.message.edit_text(f"Информация по предмету:\n{month}.{day} {hour}:{minute} {location}",
+    #                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 # Обработчик команды /register
@@ -160,12 +257,12 @@ async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    Name = cursor.execute("SELECT Name FROM Users WHERE ID = ?", (user_id,)).fetchone()
-    if not Name:
+    GroupName = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
+    if not GroupName:
         await message.answer("Введите вашу группу:")
         await state.set_state(RegisterState.group)
     else:
-        await message.answer(f"Вы уже зарегистрированы, {Name[0]}.")
+        await message.answer("ВЫ уже зарегистрированы!")
     conn.close()
 
 
@@ -221,7 +318,6 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     conn.close()
     await message.answer("✅ Регистрация завершена!")
     await state.clear()
-
 
 @dp.message() # Функция для обработки любого текстового сообщения
 async def echo_message(message: Message):
