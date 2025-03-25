@@ -34,7 +34,7 @@ def dindin():
 kb = ReplyKeyboardMarkup( # Создаем кнопки
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Авторизация")],
-        [KeyboardButton(text="Забронировать"), KeyboardButton(text="Выйти")]
+        [KeyboardButton(text="Забронировать"), KeyboardButton(text="Выйти")],
         [KeyboardButton(text="Cтатистика")]
     ],
     resize_keyboard=True
@@ -276,18 +276,30 @@ async def handle_subject(callback: CallbackQuery):
         new_poryadok = 1
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
-        await callback.answer("Минус запись!")
+        # Получаем все оставшиеся записи, отсортированные по Poryadok
+        records = cursor.execute("""
+                SELECT Id FROM Ochered 
+                WHERE numseance = ? 
+                ORDER BY Poryadok ASC
+            """, (numseance,)).fetchall()
+        # Пересчитываем Poryadok заново
+        for index, (record_id,) in enumerate(records, start=1):
+            cursor.execute("""
+                    UPDATE Ochered 
+                    SET Poryadok = ? 
+                    WHERE Id = ?
+                """, (index, record_id))
         conn.commit()
         conn.close()
+        await callback.answer("Минус запись!")
         return
     cursor.execute("""
             INSERT INTO Ochered (Numseance, Id, Poryadok)
             VALUES (?, ?, ?)
         """, (numseance, user_id, new_poryadok))
     conn.commit()
-    Position = len(cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ?", (numseance,)).fetchall())
     conn.close()
-    await callback.answer(f"Успешно! Ваш номер в очереди: {Position}")
+    await callback.answer(f"Успешно! Ваш номер в очереди: {new_poryadok}")
     keyboard = [
         [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]
     ]
