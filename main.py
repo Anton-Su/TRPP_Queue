@@ -162,8 +162,8 @@ async def command_start_handler(message: Message) -> None:
 @dp.message(Command("help")) # Функция для обработки команды /help
 @dp.message(lambda message: message.text == "Помощь")  # Обрабатываем и "Помощь"
 async def send_help(message: Message):
-    await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kb)
-
+    #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kb)
+    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали.Так отчальте от тихой пристани.Почувствуйте попутный ветер в вашем парусе.Двигайтесь вперед, действуйте, открывайте!")
 
 # Определяем состояния для FSM
 class RegisterState(StatesGroup):
