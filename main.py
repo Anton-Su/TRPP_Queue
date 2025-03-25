@@ -244,7 +244,7 @@ def generate_calendar(raspisanie): # Функция для генерации к
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-@dp.message(Command("show")) # команда записи/отмены записи
+@dp.message(Command("record")) # команда записи/отмены записи
 @dp.message(lambda message: message.text == "Забронировать") # обрабатываем и "Забронировать"
 async def command_start_handler(message: types.Message) -> None:
     user_id = message.from_user.id
