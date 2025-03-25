@@ -33,8 +33,9 @@ def dindin():
 
 kb = ReplyKeyboardMarkup( # Создаем кнопки
     keyboard=[
-        [KeyboardButton(text="Помощь"), KeyboardButton(text="О нас")],
-        [KeyboardButton(text="Контакты")]
+        [KeyboardButton(text="Помощь"), KeyboardButton(text="Авторизация")],
+        [KeyboardButton(text="Забронировать"), KeyboardButton(text="Выйти")]
+        [KeyboardButton(text="Cтатистика")]
     ],
     resize_keyboard=True
 )
@@ -114,21 +115,44 @@ async def generate_schedule(start_date, end_date, description, teacher, location
     conn.commit()
 
 
+@dp.message(Command("/stats")) # Command handler
+@dp.message(lambda message: message.text == "Cтатистика")
+async def command_start_handler(message: Message) -> None:
+    user_id = message.from_user.id
+    # conn = sqlite3.connect("queue.db")
+    # cursor = conn.cursor()
+    # Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    #
+    #
+    #
+    # Count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (Group,)).fetchall())
+    # cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
+    # if Count == 1:
+    #     cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
+    #     cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
+    #     await message.answer("Группа распущена")
+    # conn.commit()
+    # conn.close()
+    await message.answer("Очень жаль с вами расставаться, юзер", reply_markup=kb)
+
+
+
 @dp.message(Command("stop")) # Command handler
+@dp.message(lambda message: message.text == "Выйти")
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    Group = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()[0]
-    Count = len(cursor.execute("SELECT ID FROM Users WHERE GroupName = ?", (Group,)).fetchall())
-    cursor.execute("DELETE FROM Users WHERE ID = ?", (user_id,))
+    Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    Count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (Group,)).fetchall())
+    cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
     if Count == 1:
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
         cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
         await message.answer("Группа распущена")
     conn.commit()
     conn.close()
-    await message.answer("Очень жаль с вами расставаться, юзер")
+    await message.answer("Очень жаль с вами расставаться, юзер", reply_markup=kb)
 
 
 @dp.message(Command("start")) # Command handler
@@ -139,8 +163,7 @@ async def command_start_handler(message: Message) -> None:
 @dp.message(Command("help")) # Функция для обработки команды /help
 @dp.message(lambda message: message.text == "Помощь")  # Обрабатываем и "Помощь"
 async def send_help(message: Message):
-    await message.answer("ААААА! Альтушкааааа")
-
+    await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kb)
 
 
 # Определяем состояния для FSM
@@ -157,13 +180,12 @@ async def back_to_calendar(callback: CallbackQuery):
     user_id = callback.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()  # Получаем группу пользователя
+    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()  # Получаем группу пользователя
     if not group:
         await callback.answer("Вы не зарегистрированы!")
         return
     raspisanie = cursor.execute("SELECT DISTINCT Month, Day FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC", (group[0],)).fetchall()
     conn.close()
-
     keyboard = generate_calendar(raspisanie)
     await callback.message.edit_text("Определитесь с датой:", reply_markup=keyboard)
 
@@ -191,12 +213,14 @@ def generate_calendar(raspisanie):
         keyboard.append([button])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
+
 @dp.message(Command("show"))
+@dp.message(lambda message: message.text == "Забронировать")
 async def command_start_handler(message: types.Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?",(user_id,)).fetchone() # Получаем группу пользователя
+    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?",(user_id,)).fetchone() # Получаем группу пользователя
     if not group:
         await message.answer("Вы не зарегистрированы!")
         return
@@ -212,7 +236,7 @@ async def show_schedule(callback: CallbackQuery):
     user_id = callback.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    groupName = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
+    groupName = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
     subjects = cursor.execute("""
         SELECT Task, Month, Day, Hour, Minute, Location
         FROM Timetable
@@ -226,7 +250,7 @@ async def show_schedule(callback: CallbackQuery):
         text = f"{location} {str(hour).ljust(2, '0')}:{str(minute).ljust(2, '0')} - {task}"
         button = InlineKeyboardButton(
             text=text[0:60],  # Реальные данные предмета
-            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}"  # Передаем в callback_data название предмета и дату
+            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupName}"  # Передаем в callback_data параметры
         )
         keyboard.append([button])
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_calendar_{selected_date}")])
@@ -236,23 +260,44 @@ async def show_schedule(callback: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
 async def handle_subject(callback: CallbackQuery):
-    _, month, day, hour, minute, location = callback.data.split("_")
-    # Для примера выводим выбранный предмет и дату
-    await callback.answer(f"Вы выбрали предмет: {month} {day} {hour}:{minute} {location}")
-    # Можно добавить логику для отображения дополнительной информации о предмете
-    # или выполнить другие действия, например, показать описание, материалы и т. д.
+    _, month, day, hour, minute, location, group_Name = callback.data.split("_")
+    user_id = callback.from_user.id
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ? AND Hour = ? AND Minute = ? AND Location = ?",(group_Name, month, day, hour, minute, location)).fetchone()[0]
+    result = cursor.execute("""
+         SELECT MAX(Poryadok)
+         FROM Ochered
+         WHERE numseance = ?
+     """, (numseance,)).fetchone()
+    if result[0] is not None:
+        new_poryadok = result[0] + 1 # Если записи найдены, result[0] будет наибольшим Poryadok
+    else:
+        new_poryadok = 1
+    if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id)).fetchone():
+        cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
+        await callback.answer("Минус запись!")
+        conn.commit()
+        conn.close()
+        return
+    cursor.execute("""
+            INSERT INTO Ochered (Numseance, Id, Poryadok)
+            VALUES (?, ?, ?)
+        """, (numseance, user_id, new_poryadok))
+    conn.commit()
+    Position = len(cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ?", (numseance,)).fetchall())
+    conn.close()
+    await callback.answer(f"Успешно! Ваш номер в очереди: {Position}")
     keyboard = [
         [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]
     ]
-    await callback.message.edit_text("Выберите предмет:",
+    await callback.message.edit_text("Again?",
                                      reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-
-    # await callback.message.edit_text(f"Информация по предмету:\n{month}.{day} {hour}:{minute} {location}",
-    #                                  reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 # Обработчик команды /register
 @dp.message(Command("register"))
+@dp.message(lambda message: message.text == "Авторизация")  # Обрабатываем и "Авторизация"
 async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
@@ -262,7 +307,7 @@ async def register(message: types.Message, state: FSMContext):
         await message.answer("Введите вашу группу:")
         await state.set_state(RegisterState.group)
     else:
-        await message.answer("ВЫ уже зарегистрированы!")
+        await message.answer("Вы уже зарегистрированы!")
     conn.close()
 
 
@@ -286,7 +331,6 @@ async def process_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text.capitalize())
     await message.answer("Введите вашу фамилию:")
     await state.set_state(RegisterState.surname)
-
 
 
 @dp.message(RegisterState.surname) # Обработка ввода фамилии
@@ -316,8 +360,9 @@ async def process_middle_name(message: types.Message, state: FSMContext):
         url = cursor.fetchone()[0]
         await get_schedule(url, user_data['group'])
     conn.close()
-    await message.answer("✅ Регистрация завершена!")
+    await message.answer("✅ Регистрация завершена!", reply_markup=kb)
     await state.clear()
+
 
 @dp.message() # Функция для обработки любого текстового сообщения
 async def echo_message(message: Message):
