@@ -33,7 +33,7 @@ kbregister = ReplyKeyboardMarkup( # Создаем кнопки
 )
 kbnotregister = ReplyKeyboardMarkup( # Создаем кнопки
     keyboard=[
-        [KeyboardButton(text="Помощь"), KeyboardButton(text="Авторизация")]
+        [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
     ],
     resize_keyboard=True
 )
@@ -326,7 +326,7 @@ async def handle_subject(callback: CallbackQuery):
 
 
 @dp.message(Command("register")) # Обработчик команды /register
-@dp.message(lambda message: message.text == "Авторизация")  # Обрабатываем и "Авторизация"
+@dp.message(lambda message: message.text == "Регистрация")  # Обрабатываем и "Регистрация"
 async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
