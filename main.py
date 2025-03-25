@@ -157,12 +157,16 @@ async def command_start_handler(message: Message) -> None:
     results = []
     current_date = datetime.now()
     year = current_date.year
-    for Num, Poryadok in Numseance_Poryadok:
-        subject, teacherfio, month, date, hour, minite, location = cursor.execute("SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ?", (Group, Num)).fetchall()[0]
-        results.append(f"{Poryadok} место в очереди, {location} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')} {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} - {subject} - ведёт {teacherfio}")
-    results.insert(0, f"Всего активных записей: {len(results)}")
+    for index, (Num, Poryadok) in enumerate(Numseance_Poryadok, start=1):
+        subject, teacherfio, month, date, hour, minite, location = cursor.execute(
+            "SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ? "
+            "ORDER BY Timetable.Month ASC, Timetable.Day ASC, Timetable.Hour ASC, Timetable.Minute ASC",
+            (Group, Num)).fetchall()[0]
+        results.append(
+            f"{index}. {Poryadok} место в очереди, {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     conn.commit()
     conn.close()
+    results.insert(0, f'Всего активных записей: {len(results)}')
     await message.answer("\n".join(results), reply_markup=kbregister)
 
 
@@ -187,10 +191,10 @@ async def command_start_handler(message: Message) -> None:
     if Count == 1:
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
         cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
-        await message.answer("Группа распущена")
+        await message.answer(f"Группа {Group} распущена")
     conn.commit()
     conn.close()
-    await message.answer("Очень жаль с вами расставаться, юзер, возвращайтесь поскорее", reply_markup=kbnotregister)
+    await message.answer("😢Очень жаль с вами расставаться, юзер, возвращайтесь поскорее!!!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("start")) # Начальная команда
@@ -337,7 +341,7 @@ async def process_group(message: types.Message, state: FSMContext):
     url = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
     conn.close()
     if not url:
-        await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.")
+        await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
         await state.clear()
         return
     await message.answer("Введите ваше имя:")
