@@ -156,14 +156,14 @@ async def command_start_handler(message: Message) -> None:
 
 @dp.message(Command("start")) # Command handler
 async def command_start_handler(message: Message) -> None:
-    await message.answer("Привет! Я бот, который регулирует процесс очереди", reply_markup=kb)
+    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, слежу, и всё такое", reply_markup=kb)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
 @dp.message(lambda message: message.text == "Помощь")  # Обрабатываем и "Помощь"
 async def send_help(message: Message):
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kb)
-    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали.Так отчальте от тихой пристани.Почувствуйте попутный ветер в вашем парусе.Двигайтесь вперед, действуйте, открывайте!")
+    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали.Так отчальте от тихой пристани.Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kb)
 
 # Определяем состояния для FSM
 class RegisterState(StatesGroup):
