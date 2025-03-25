@@ -129,7 +129,7 @@ async def command_start_handler(message: Message) -> None:
     for Num, Poryadok in Numseance_Poryadok:
         subject, teacherfio, month, date, hour, minite, location = cursor.execute("SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ?", (Group, Num)).fetchall()[0]
         results.append(f"{Poryadok} место в очереди, {location} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')} {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} - {subject} - ведёт {teacherfio}")
-    results.insert(0, f"Всего записей: {len(results)}")
+    results.insert(0, f"Всего активных записей: {len(results)}")
     conn.commit()
     conn.close()
     await message.answer("\n".join(results), reply_markup=kb)
@@ -151,7 +151,7 @@ async def command_start_handler(message: Message) -> None:
         await message.answer("Группа распущена")
     conn.commit()
     conn.close()
-    await message.answer("Очень жаль с вами расставаться, юзер", reply_markup=kb)
+    await message.answer("Очень жаль с вами расставаться, юзер, возвращайтесь поскорее", reply_markup=kb)
 
 
 @dp.message(Command("start")) # Command handler
