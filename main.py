@@ -247,7 +247,7 @@ async def show_schedule(callback: CallbackQuery):
     for subject in subjects:
         task, month, day, hour, minute, location = subject
         # Формируем текст кнопки с названием предмета, временем и местом
-        text = f"{location} {str(hour).ljust(2, '0')}:{str(minute).ljust(2, '0')} - {task}"
+        text = f"{location} {str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')} - {task}"
         button = InlineKeyboardButton(
             text=text[0:60],  # Реальные данные предмета
             callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupName}"  # Передаем в callback_data параметры
