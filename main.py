@@ -7,8 +7,7 @@ from os import getenv
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, \
-    CallbackQuery
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks
@@ -24,19 +23,24 @@ scheduler = AsyncIOScheduler()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s") # устанавливаю логгирование
 logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
-kbregister = ReplyKeyboardMarkup( # Создаем кнопки
+kbregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только зарегистрированный пользователь
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Выйти")],
         [KeyboardButton(text="Забронировать"), KeyboardButton(text="Cтатистика")]
     ],
-    resize_keyboard=True
-)
-kbnotregister = ReplyKeyboardMarkup( # Создаем кнопки
+    resize_keyboard=True)
+kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только незарегистрированный пользователь
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
     ],
-    resize_keyboard=True
-)
+    resize_keyboard=True)
+
+
+class RegisterState(StatesGroup): # Определяем состояния для FSM
+    group = State()
+    name = State()
+    surname = State()
+    middle_name = State()
 
 
 async def dindin(): # заглушка для реализации обработки начала занятия
@@ -133,10 +137,8 @@ async def generate_schedule(start_date, end_date, description, teacher, location
             groupName, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute,
             location)).fetchone()
             if not exists:
-                cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, TASK, MONTH, DAY, HOUR, MINUTE, LOCATION) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (groupName, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute, location)
-                )
+                cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, TASK, MONTH, DAY, HOUR, MINUTE, LOCATION) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (groupName, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute, location))
                 conn.commit()
             break
         start_date += timedelta(weeks=2) # Добавляем 2 недели
@@ -194,7 +196,7 @@ async def command_start_handler(message: Message) -> None:
 
 @dp.message(Command("start")) # Начальная команда
 async def command_start_handler(message: Message) -> None:
-    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, слежу, и всё такое", reply_markup=kbnotregister)
+    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, слежу, и всё такое. Просто зарегистрируйся, и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
@@ -202,14 +204,6 @@ async def command_start_handler(message: Message) -> None:
 async def send_help(message: Message):
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
-
-
-# Определяем состояния для FSM
-class RegisterState(StatesGroup):
-    group = State()
-    name = State()
-    surname = State()
-    middle_name = State()
 
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
@@ -287,8 +281,7 @@ async def show_schedule(callback: CallbackQuery):
         )
         keyboard.append([button])
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_calendar_{selected_date}")])
-    await callback.message.edit_text("Выберите предмет:",
-                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+    await callback.message.edit_text("Выберите предмет:", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 @dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
@@ -318,11 +311,8 @@ async def handle_subject(callback: CallbackQuery):
     conn.commit()
     conn.close()
     await callback.answer(f"Успешно! Ваш номер в очереди: {new_poryadok}")
-    keyboard = [
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]
-    ]
-    await callback.message.edit_text("Again?",
-                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
+    keyboard = [[InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]]
+    await callback.message.edit_text("Успешно. Ещё?",reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 @dp.message(Command("register")) # Обработчик команды /register
@@ -375,11 +365,8 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     middle_name = message.text.capitalize() if message.text != "-" else None
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) 
-        VALUES (?, ?, ?, ?, ?)""",
-                   (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name)
-                   )
+    cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
+                   (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name))
     conn.commit()
     exists = cursor.execute("SELECT 1 FROM All_groups WHERE GroupName = ?", (user_data['group'],)).fetchone()
     if not exists: # подгрузить расписание группы
@@ -397,7 +384,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
 async def main() -> None: # Run the bot
     await delete_old_sessions()
     await refresh_schedule()
-    await generatescheduler_to_currect_day()
+    await generatescheduler_to_currect_day() # начальные три дейтсвия
     scheduler.add_job(refresh_schedule, day_of_week='sun', trigger='cron', hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=1, day=10, hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=9, day=10, hour=0, minute=30)
