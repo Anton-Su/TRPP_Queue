@@ -165,15 +165,24 @@ async def command_start_handler(message: Message) -> None:
     await message.answer("\n".join(results), reply_markup=kbregister)
 
 
-@dp.message(Command("stop")) # Команда выйти из системы
-@dp.message(lambda message: message.text == "Выйти") # Обрабатываем и "Выйти"
+@dp.message(Command("exit"))  # Команда выйти из системы
+@dp.message(lambda message: message.text == "Выйти")  # Обрабатываем и "Выйти"
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
     Count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (Group,)).fetchall())
+    numseances = cursor.execute("SELECT DISTINCT Numseance FROM Ochered WHERE Id = ?", (user_id,)).fetchall() # Получаем все numseance, в которых пользователь был записан
+    cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
+    # Пересчитываем порядок (Poryadok) для всех numseance, в которых был пользователь
+    for (numseance,) in numseances:
+        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok ASC""", (numseance,)).fetchall()
+        for index, (record_id,) in enumerate(records, start=1):
+            cursor.execute("UPDATE Ochered SET Poryadok = ? WHERE Id = ?", (index, record_id))
+    # Удаляем пользователя из Users
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
+    # Если он был последним участником группы, удаляем все данные группы
     if Count == 1:
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
         cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
@@ -303,7 +312,7 @@ async def handle_subject(callback: CallbackQuery):
             cursor.execute("""UPDATE Ochered SET Poryadok = ? WHERE Id = ?""", (index, record_id))
         conn.commit()
         conn.close()
-        await callback.answer("Минус запись!")
+        await callback.answer("Запись отменена!")
         return
     cursor.execute("""INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)""", (numseance, user_id, new_poryadok))
     conn.commit()
@@ -314,7 +323,6 @@ async def handle_subject(callback: CallbackQuery):
     ]
     await callback.message.edit_text("Again?",
                                      reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
-
 
 
 @dp.message(Command("register")) # Обработчик команды /register

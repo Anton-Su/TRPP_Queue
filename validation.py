@@ -12,6 +12,10 @@ def form_correctslinks(stop=10000):
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")
+    cursor.execute("DELETE FROM Users;")
+    cursor.execute("DELETE FROM Ochered;")
+    cursor.execute("DELETE FROM All_groups;")
+    cursor.execute("DELETE FROM Timeable;")
     for i in range(stop):
         url = f"{base_url}{i:03d}"  # Формируем URL
         try:
