@@ -119,21 +119,20 @@ async def generate_schedule(start_date, end_date, description, teacher, location
 @dp.message(lambda message: message.text == "Cтатистика")
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
-    # conn = sqlite3.connect("queue.db")
-    # cursor = conn.cursor()
-    # Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    #
-    #
-    #
-    # Count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (Group,)).fetchall())
-    # cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
-    # if Count == 1:
-    #     cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
-    #     cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
-    #     await message.answer("Группа распущена")
-    # conn.commit()
-    # conn.close()
-    await message.answer("Очень жаль с вами расставаться, юзер", reply_markup=kb)
+    conn = sqlite3.connect("queue.db")
+    cursor = conn.cursor()
+    Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    Numseance_Poryadok = cursor.execute("SELECT Numseance, Poryadok FROM Ochered WHERE Id = ?", (user_id,)).fetchall()
+    results = []
+    current_date = datetime.now()
+    year = current_date.year
+    for Num, Poryadok in Numseance_Poryadok:
+        subject, teacherfio, month, date, hour, minite, location = cursor.execute("SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ?", (Group, Num)).fetchall()[0]
+        results.append(f"{Poryadok} место в очереди, {location} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')} {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} - {subject} - ведёт {teacherfio}")
+    results.insert(0, f"Всего записей: {len(results)}")
+    conn.commit()
+    conn.close()
+    await message.answer("\n".join(results), reply_markup=kb)
 
 
 
