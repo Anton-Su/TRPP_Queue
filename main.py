@@ -1,4 +1,3 @@
-import contextlib
 import requests
 from icalendar import Calendar
 from datetime import datetime, timedelta
