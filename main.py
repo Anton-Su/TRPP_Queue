@@ -96,16 +96,16 @@ async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    numseance_poryadok = cursor.execute("SELECT Numseance, Poryadok FROM Ochered WHERE Id = ?", (user_id,)).fetchall()
     results = []
-    current_date = datetime.now()
-    year = current_date.year
-    for index, (Num, Poryadok) in enumerate(numseance_poryadok, start=1):
-        subject, teacherfio, month, date, hour, minite, location = cursor.execute(
-            "SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ? "
-            "ORDER BY Timetable.Month ASC, Timetable.Day ASC, Timetable.Hour ASC, Timetable.Minute ASC",
-            (group, Num)).fetchall()[0]
+    year = datetime.now().year
+    Result = cursor.execute("""
+        SELECT T.Task, T.TeacherFIO, T.Month, T.Day, T.Hour, T.Minute, T.Location, O.Poryadok
+        FROM Timetable T
+        JOIN Ochered O ON T.Id = O.Numseance
+        WHERE O.Id = ?
+        ORDER BY T.Month ASC, T.Day ASC, T.Hour ASC, T.Minute ASC
+    """, (user_id,)).fetchall()
+    for index, (subject, teacherfio, month, date, hour, minite, location, Poryadok) in enumerate(Result, start=1):
         results.append(
             f"{index}. {Poryadok} место в очереди, {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     conn.commit()
