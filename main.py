@@ -78,8 +78,9 @@ async def delete_old_sessions(): # удалить просроченное (на
     if result:
         cursor.execute("DELETE FROM Timetable WHERE Month < ? OR (Month = ? AND Day < ?) OR (Month = ? AND Day = ? AND Hour < ?) OR (Month = ? AND Day = ? AND Hour = ? AND Minute < ?)",
                    (month, month, day, month, day, hour, month, day, hour, minute))
-        cursor.execute(
-            "DELETE FROM Ochered WHERE Numseance = ?)",(result, ))
+        ids = [row[0] for row in result]  # Преобразуем список кортежей в список ID
+        cursor.execute(f"DELETE FROM Timetable WHERE ID IN ({','.join(['?'] * len(ids))})", ids)
+        cursor.execute(f"DELETE FROM Ochered WHERE Numseance IN ({','.join(['?'] * len(ids))})", ids)
         conn.commit()
     conn.close()
 
