@@ -1,17 +1,18 @@
 from datetime import datetime, timedelta
-import asyncio
 from os import getenv
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 import sqlite3
-from schedule import refresh_schedule, get_schedule, delete_old_sessions
+from schedule import refresh_schedule, get_schedule
+from deletion import delete_old_sessions
+import logging
+import asyncio
 
 
 load_dotenv() # получаю значение токена из специального файла
@@ -25,13 +26,11 @@ kbregister = ReplyKeyboardMarkup( # Создаем кнопку, которую 
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Выйти")],
         [KeyboardButton(text="Забронировать"), KeyboardButton(text="Cтатистика")]
-    ],
-    resize_keyboard=True)
+    ], resize_keyboard=True)
 kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только незарегистрированный пользователь
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
-    ],
-    resize_keyboard=True)
+    ], resize_keyboard=True)
 
 
 class RegisterState(StatesGroup): # Определяем состояния для FSM
@@ -71,6 +70,7 @@ def generate_calendar(raspisanie): # Функция для генерации к
             callback_data=f"date_{day.strftime('%Y-%m-%d')}"
         )
         keyboard.append([button])
+    keyboard.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="remove_keyboard")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -78,10 +78,10 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     current_date = datetime.now()
-    Hour_minute = cursor.execute("SELECT DISTINCT Hour, Minute FROM Timetable WHERE Month = ? AND Day = ?",
+    hour_minute = cursor.execute("SELECT DISTINCT Hour, Minute FROM Timetable WHERE Month = ? AND Day = ?",
                                  (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
-    if Hour_minute:
-        for hour, minute in Hour_minute:
+    if hour_minute:
+        for hour, minute in hour_minute:
             existing_job = scheduler.get_job(f"{hour}_{minute}")
             if not existing_job: # если id такого не встречалось
                 start_date = datetime(current_date.year, current_date.month, current_date.day, hour, minute)
@@ -91,21 +91,21 @@ async def generatescheduler_to_currect_day(): # установка будиль�
 
 
 @dp.message(Command("stats")) # Команда посмотреть статистику
-@dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Cтатистика"
+@dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Статистика"
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    Numseance_Poryadok = cursor.execute("SELECT Numseance, Poryadok FROM Ochered WHERE Id = ?", (user_id,)).fetchall()
+    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    numseance_poryadok = cursor.execute("SELECT Numseance, Poryadok FROM Ochered WHERE Id = ?", (user_id,)).fetchall()
     results = []
     current_date = datetime.now()
     year = current_date.year
-    for index, (Num, Poryadok) in enumerate(Numseance_Poryadok, start=1):
+    for index, (Num, Poryadok) in enumerate(numseance_poryadok, start=1):
         subject, teacherfio, month, date, hour, minite, location = cursor.execute(
             "SELECT Task, TeacherFIO, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Id = ? "
             "ORDER BY Timetable.Month ASC, Timetable.Day ASC, Timetable.Hour ASC, Timetable.Minute ASC",
-            (Group, Num)).fetchall()[0]
+            (group, Num)).fetchall()[0]
         results.append(
             f"{index}. {Poryadok} место в очереди, {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     conn.commit()
@@ -120,8 +120,8 @@ async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    Group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    Count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (Group,)).fetchall())
+    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (group,)).fetchall())
     numseances = cursor.execute("SELECT DISTINCT Numseance FROM Ochered WHERE Id = ?", (user_id,)).fetchall() # Получаем все numseance, в которых пользователь был записан
     cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
     # Пересчитываем порядок (Poryadok) для всех numseance, в которых был пользователь
@@ -129,16 +129,14 @@ async def command_start_handler(message: Message) -> None:
         records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok ASC""", (numseance,)).fetchall()
         for index, (record_id,) in enumerate(records, start=1):
             cursor.execute("UPDATE Ochered SET Poryadok = ? WHERE Id = ?", (index, record_id))
-    # Удаляем пользователя из Users
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
-    # Если он был последним участником группы, удаляем все данные группы
-    if Count == 1:
-        cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (Group,))
-        cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (Group,))
-        await message.answer(f"Группа {Group} распущена")
+    if count == 1: # Если он был последним участником группы, удаляем все данные группы
+        cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
+        cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
+        await message.answer(f"Группа {group} распущена")
     conn.commit()
     conn.close()
-    await message.answer("😢Очень жаль с вами расставаться, юзер, возвращайтесь поскорее!!!", reply_markup=kbnotregister)
+    await message.answer("😢Очень жаль с вами расставаться, юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("start")) # Начальная команда
@@ -155,33 +153,37 @@ async def send_help(message: Message):
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
 async def back_to_calendar(callback: CallbackQuery):
-    user_id = callback.from_user.id
+    await show_calendar(user_id=callback.from_user.id, callback=callback)
+
+
+async def show_calendar(user_id: int, message: types.Message = None, callback: CallbackQuery = None): #Универсальная функция для показа календаря (из команды и callback-запроса
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()  # Получаем группу пользователя
+    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()
     if not group:
-        await callback.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
-        return
-    raspisanie = cursor.execute("SELECT DISTINCT Month, Day FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC", (group[0],)).fetchall()
+        if message:
+            return await message.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
+        return await callback.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
+    raspisanie = cursor.execute(
+        "SELECT DISTINCT Month, Day FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC",
+        (group[0],)).fetchall()
     conn.close()
     keyboard = generate_calendar(raspisanie)
-    await callback.message.edit_text("Определитесь с датой:", reply_markup=keyboard)
+    if message: # Определяем, как отправить сообщение
+        await message.answer("Определитесь с датой:", reply_markup=keyboard)
+    elif callback:
+        await callback.message.edit_text("Определитесь с датой:", reply_markup=keyboard)
 
 
 @dp.message(Command("record")) # команда записи/отмены записи
 @dp.message(lambda message: message.text == "Забронировать") # обрабатываем и "Забронировать"
 async def command_start_handler(message: types.Message) -> None:
-    user_id = message.from_user.id
-    conn = sqlite3.connect("queue.db")
-    cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?",(user_id,)).fetchone() # Получаем группу пользователя
-    if not group:
-        await message.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
-        return
-    raspisanie = cursor.execute("SELECT DISTINCT Month, DAY FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC", (group[0],)).fetchall()
-    keyboard = generate_calendar(raspisanie)
-    conn.close()
-    await message.answer("Определитесь с датой:", reply_markup=keyboard)
+    await show_calendar(user_id=message.from_user.id, message=message)
+
+
+@dp.callback_query(F.data.startswith("remove_keyboard"))
+async def remove_keyboard(callback: CallbackQuery): #  Удаляет всю inline-клавиатуру после нажатия на кнопку.
+    await callback.message.delete()
 
 
 @dp.callback_query(F.data.startswith("date_")) # Обработчик выбора даты
@@ -190,9 +192,9 @@ async def show_schedule(callback: CallbackQuery):
     user_id = callback.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    groupName = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
+    groupname = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
     subjects = cursor.execute("""SELECT Task, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ?""",
-                              (groupName, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
+                              (groupname, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
     conn.close()
     keyboard = []
     for subject in subjects:
@@ -201,20 +203,21 @@ async def show_schedule(callback: CallbackQuery):
         text = f"{location} {str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')} - {task}"
         button = InlineKeyboardButton(
             text=text[0:60],  # Реальные данные предмета
-            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupName}"  # Передаем в callback_data параметры
+            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}"  # Передаем в callback_data параметры
         )
         keyboard.append([button])
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_calendar_{selected_date}")])
+    keyboard.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="remove_keyboard")])
     await callback.message.edit_text("Выберите предмет:", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 @dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
 async def handle_subject(callback: CallbackQuery):
-    _, month, day, hour, minute, location, group_Name = callback.data.split("_")
+    _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ? AND Hour = ? AND Minute = ? AND Location = ?",(group_Name, month, day, hour, minute, location)).fetchone()[0]
+    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ? AND Hour = ? AND Minute = ? AND Location = ?",(groupname, month, day, hour, minute, location)).fetchone()[0]
     result = cursor.execute("""SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?""", (numseance,)).fetchone()
     if result[0] is not None:
         new_poryadok = result[0] + 1 # Если записи найдены, result[0] будет наибольшим Poryadok
@@ -224,19 +227,15 @@ async def handle_subject(callback: CallbackQuery):
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
         # Получаем все оставшиеся записи, отсортированные по Poryadok
         records = cursor.execute("""SELECT Id FROM Ochered WHERE numseance = ? ORDER BY Poryadok ASC""", (numseance,)).fetchall()
-        # Пересчитываем Poryadok заново
-        for index, (record_id,) in enumerate(records, start=1):
+        for index, (record_id,) in enumerate(records, start=1): # Пересчитываем Poryadok заново
             cursor.execute("""UPDATE Ochered SET Poryadok = ? WHERE Id = ?""", (index, record_id))
         conn.commit()
         conn.close()
-        await callback.answer("Запись отменена!")
-        return
+        return await callback.answer("Запись отменена!")
     cursor.execute("""INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)""", (numseance, user_id, new_poryadok))
     conn.commit()
     conn.close()
     await callback.answer(f"Успешно! Ваш номер в очереди: {new_poryadok}")
-    keyboard = [[InlineKeyboardButton(text="⬅️ Назад", callback_data=f"date_{datetime.now().year}-{month}-{day}")]]
-    await callback.message.edit_text("Успешно. Ещё?",reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
 @dp.message(Command("register")) # Обработчик команды /register
@@ -245,8 +244,8 @@ async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
-    GroupName = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
-    if not GroupName:
+    groupname = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
+    if not groupname:
         await message.answer("Введите вашу группу:")
         await state.set_state(RegisterState.group)
     else:
@@ -292,8 +291,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
                    (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name))
     conn.commit()
-    exists = cursor.execute("SELECT 1 FROM All_groups WHERE GroupName = ?", (user_data['group'],)).fetchone()
-    if not exists: # подгрузить расписание группы
+    if not cursor.execute("SELECT 1 FROM All_groups WHERE GroupName = ?", (user_data['group'],)).fetchone(): # подгрузить расписание группы
         cursor.execute("""INSERT INTO All_groups (GroupName) VALUES (?)""", (user_data['group'],))
         conn.commit()
         cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
@@ -308,10 +306,9 @@ async def process_middle_name(message: types.Message, state: FSMContext):
 async def main() -> None: # Run the bot
     await delete_old_sessions()
     await refresh_schedule()
-    await generatescheduler_to_currect_day() # начальные три дейcтвия
+    await generatescheduler_to_currect_day() # начальные три действия
     scheduler.add_job(refresh_schedule, day_of_week='sun', trigger='cron', hour=0, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=1, day=10, hour=0, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=9, day=10, hour=0, minute=30)
+    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30)
     scheduler.add_job(generatescheduler_to_currect_day, trigger='cron', hour=7, minute=30)
     scheduler.start()
     await dp.start_polling(bot)
