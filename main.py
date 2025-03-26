@@ -133,10 +133,10 @@ async def command_start_handler(message: Message) -> None:
     if count == 1: # Если он был последним участником группы, удаляем все данные группы
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
         cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-        await message.answer(f"Группа {group} распущена")
+        await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» распущена!")
     conn.commit()
     conn.close()
-    await message.answer("😢Очень жаль с вами расставаться, юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
+    await message.answer("😢😢😢Очень жаль с вами расставаться, Юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("start")) # Начальная команда
