@@ -147,7 +147,7 @@ async def generate_schedule(start_date, end_date, description, teacher, location
     conn.close()
 
 
-@dp.message(Command("/stats")) # Команда посмотреть статистику
+@dp.message(Command("stats")) # Команда посмотреть статистику
 @dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Cтатистика"
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
