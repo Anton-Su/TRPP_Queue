@@ -115,20 +115,22 @@ async def get_schedule(url, groupName):
                     if description:
                         test = description.split('\n')
                         if len(test) == 2:
+                            EXDATE = component.get('exdate').dts
+                            Exd = [i.dt.replace(tzinfo=None) for i in EXDATE] # список datetime исключений
                             teacher_fio = test[0].replace('Преподаватель: ', '')
                             # Передаём даты в виде объектов datetime
                             await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None), summary,
-                                                    teacher_fio, location, groupName)
+                                                    teacher_fio, location, groupName, Exd)
     else:
         print(f"⚠ Ошибка {response.status_code} для {url}")
 
 
-async def generate_schedule(start_date, end_date, description, teacher, location, groupName): # Генерируем расписание на ближайшие две недели
+async def generate_schedule(start_date, end_date, description, teacher, location, groupName, EXDATE): # Генерируем расписание на ближайшие две недели
     current_date = datetime.now()
     if current_date.month > 1:  # Конец семестра: если после января, конец семестра - май
         end_of_semester = datetime(current_date.year, 5, 31)
     else:
-        end_of_semester = datetime(current_date.year, 9, 30)
+        end_of_semester = datetime(current_date.year, 12, 31)
     conn = sqlite3.connect("queue.db")
     cursor = conn.cursor()
     while start_date <= end_of_semester:
@@ -136,7 +138,7 @@ async def generate_schedule(start_date, end_date, description, teacher, location
             exists = cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ? AND TeacherFIO = ? AND TASK = ? AND MONTH = ? AND DAY = ? AND HOUR = ? AND MINUTE = ? AND LOCATION = ?""", (
             groupName, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute,
             location)).fetchone()
-            if not exists:
+            if not exists and start_date not in EXDATE:
                 cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, TASK, MONTH, DAY, HOUR, MINUTE, LOCATION) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (groupName, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute, location))
                 conn.commit()
