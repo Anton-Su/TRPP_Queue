@@ -14,7 +14,7 @@ def form_correctslinks(stop=10000):
     cursor.execute("DELETE FROM Users;")
     cursor.execute("DELETE FROM Ochered;")
     cursor.execute("DELETE FROM All_groups;")
-    cursor.execute("DELETE FROM Timeable;")
+    cursor.execute("DELETE FROM Timetable;")
     conn.commit()
     for i in range(stop):
         url = f"{base_url}{i:03d}"  # Формируем URL

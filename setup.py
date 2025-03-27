@@ -15,7 +15,7 @@ setup(
     ],
     package_data={
         # Указываем все файлы .db в текущей директории
-        "": ["*.db", "*.py"],  # Включаем все .py и .db файлы
+        "": ["*.db", ".env"],  # Включаем все .py и .db файлы
     },
     include_package_data=True,
     entry_points={
