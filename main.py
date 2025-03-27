@@ -303,7 +303,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-async def main() -> None: # Run the bot
+async def main_async() -> None: # Run the bot
     await delete_old_sessions()
     await refresh_schedule()
     await generatescheduler_to_currect_day() # начальные три действия
@@ -314,5 +314,8 @@ async def main() -> None: # Run the bot
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+def main() -> None:
+    asyncio.run(main_async())
+
+if __name__ == '__main__':
+    main()
