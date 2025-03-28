@@ -26,11 +26,11 @@ kbregister = ReplyKeyboardMarkup( # Создаем кнопку, которую 
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Выйти")],
         [KeyboardButton(text="Забронировать"), KeyboardButton(text="Cтатистика")]
-    ], resize_keyboard=True)
+    ], resize_keyboard=True, one_time_keyboard=False)
 kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только незарегистрированный пользователь
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
-    ], resize_keyboard=True)
+    ], resize_keyboard=True, one_time_keyboard=False)
 
 
 class RegisterState(StatesGroup): # Определяем состояния для FSM
@@ -111,7 +111,7 @@ async def command_start_handler(message: Message) -> None:
     conn.commit()
     conn.close()
     results.insert(0, f'Всего активных записей: {len(results)}')
-    await message.answer("\n".join(results), reply_markup=kbregister)
+    await message.answer("\n".join(results))
 
 
 @dp.message(Command("exit"))  # Команда выйти из системы
