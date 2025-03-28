@@ -75,7 +75,7 @@ def generate_calendar(raspisanie): # Функция для генерации к
 
 
 async def generatescheduler_to_currect_day(): # установка будильников на текущий день
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     current_date = datetime.now()
     hour_minute = cursor.execute("SELECT DISTINCT Hour, Minute FROM Timetable WHERE Month = ? AND Day = ?",
@@ -94,7 +94,7 @@ async def generatescheduler_to_currect_day(): # установка будиль�
 @dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Статистика"
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     results = []
     year = datetime.now().year
@@ -118,7 +118,7 @@ async def command_start_handler(message: Message) -> None:
 @dp.message(lambda message: message.text == "Выйти")  # Обрабатываем и "Выйти"
 async def command_start_handler(message: Message) -> None:
     user_id = message.from_user.id
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
     count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (group,)).fetchall())
@@ -157,7 +157,7 @@ async def back_to_calendar(callback: CallbackQuery):
 
 
 async def show_calendar(user_id: int, message: types.Message = None, callback: CallbackQuery = None): #Универсальная функция для показа календаря (из команды и callback-запроса
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()
     if not group:
@@ -190,7 +190,7 @@ async def remove_keyboard(callback: CallbackQuery): #  Удаляет всю inl
 async def show_schedule(callback: CallbackQuery):
     selected_date = callback.data.split("_")[1]  # Дата в формате YYYY-MM-DD
     user_id = callback.from_user.id
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     groupname = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
     subjects = cursor.execute("""SELECT Task, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ?""",
@@ -215,7 +215,7 @@ async def show_schedule(callback: CallbackQuery):
 async def handle_subject(callback: CallbackQuery):
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ? AND Hour = ? AND Minute = ? AND Location = ?",(groupname, month, day, hour, minute, location)).fetchone()[0]
     result = cursor.execute("""SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?""", (numseance,)).fetchone()
@@ -242,7 +242,7 @@ async def handle_subject(callback: CallbackQuery):
 @dp.message(lambda message: message.text == "Регистрация")  # Обрабатываем и "Регистрация"
 async def register(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     groupname = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
     if not groupname:
@@ -256,7 +256,7 @@ async def register(message: types.Message, state: FSMContext):
 @dp.message(RegisterState.group) # Обработка ввода группы
 async def process_group(message: types.Message, state: FSMContext):
     await state.update_data(group=message.text.upper())
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     url = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
     conn.close()
@@ -286,7 +286,7 @@ async def process_surname(message: types.Message, state: FSMContext):
 async def process_middle_name(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
     middle_name = message.text.capitalize() if message.text != "-" else None
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
                    (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name))

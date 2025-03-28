@@ -1,11 +1,12 @@
 import requests
 from icalendar import Calendar
 import sqlite3
+from os import getenv
 from datetime import datetime, timedelta
 
 
 async def refresh_schedule(): # обновить расписание
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     groups = cursor.execute("SELECT GroupName FROM All_groups").fetchall()  # Получаем все строки в виде списка кортежей
     for group in groups:
@@ -44,7 +45,7 @@ async def generate_schedule(start_date, description, teacher, location, groupnam
         end_of_semester = datetime(current_date.year, 6, 16)
     else:
         end_of_semester = datetime(current_date.year, 2, 4)
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     while start_date <= end_of_semester:
         if current_date <= start_date:

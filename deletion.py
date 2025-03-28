@@ -1,9 +1,9 @@
 import sqlite3
 from datetime import datetime
-
+from os import getenv
 
 async def delete_old_sessions(): # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     current_date = datetime.now()
     hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month

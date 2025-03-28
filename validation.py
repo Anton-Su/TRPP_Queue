@@ -1,14 +1,14 @@
 from icalendar import Calendar
 import requests
 import sqlite3
-
+from os import getenv
 
 #output_file = "valid_schedules.txt" # пока что будем сохранять типа в файле, потом в БД переведу
 base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
 
 
 def form_correctslinks(stop=10000):
-    conn = sqlite3.connect("queue.db")
+    conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")
     cursor.execute("DELETE FROM Users;")
