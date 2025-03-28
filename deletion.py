@@ -3,6 +3,12 @@ from datetime import datetime
 from os import getenv
 
 async def delete_old_sessions(): # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+    """
+    Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
+    Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
+    Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
+    """
+
     conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     current_date = datetime.now()

@@ -8,6 +8,17 @@ base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.
 
 
 def form_correctslinks(stop=10000):
+    """
+    Формирует правильные ссылки и записывает данные о группах и расписаниях в базу данных.
+    Функция выполняет следующие действия:
+    1. Очищает таблицы базы данных: `Session`, `Users`, `Ochered`, `All_groups`, `Timetable`.
+    2. Для каждого URL, сгенерированного на основе числа от 0 до `stop`, выполняет HTTP-запрос.
+    3. Если ответ успешен (код 200), извлекает информацию о расписании в формате iCal и преобразует его.
+    4. Если расписание содержит более 5 событий, сохраняет название группы и URL в таблицу `Session`.
+    Параметры:
+    :param stop: число, определяющее количество итераций для генерации URL. По умолчанию 10000
+    """
+
     conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")

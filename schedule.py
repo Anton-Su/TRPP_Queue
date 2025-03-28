@@ -6,6 +6,14 @@ from datetime import datetime, timedelta
 
 
 async def refresh_schedule(): # обновить расписание
+    """
+    Обновляет расписание для всех групп, используя URL, сохраненные в базе данных.
+    Функция выполняет следующие шаги:
+       1. Получает список всех групп из базы данных.
+       2. Для каждой группы извлекает URL, связанный с ней.
+       3. Для каждой группы вызывает функцию `get_schedule`, чтобы обновить расписание.
+    """
+
     conn = sqlite3.connect(getenv("DATABASE_URL"))
     cursor = conn.cursor()
     groups = cursor.execute("SELECT GroupName FROM All_groups").fetchall()  # Получаем все строки в виде списка кортежей
@@ -17,6 +25,16 @@ async def refresh_schedule(): # обновить расписание
 
 
 async def get_schedule(url, groupname):
+    """
+    Получает расписание для конкретной группы, парсит iCal контент и сохраняет его в базе данных.
+    Функция выполняет следующие шаги:
+        1. Отправляет HTTP-запрос на указанный URL для получения расписания.
+        2. Извлекает расписание в формате iCal и парсит его.
+        3. Для каждого события в расписании, если оно соответствует определенным критериям, передает данные в `generate_schedule`.
+    :param url: URL, по которому доступно расписание группы в формате iCal.
+    :param groupname: Название группы, для которой обновляется расписание.
+    """
+
     response = requests.get(url, timeout=5)
     if response.status_code == 200:
         data = response.json()
@@ -40,6 +58,20 @@ async def get_schedule(url, groupname):
 
 
 async def generate_schedule(start_date, description, teacher, location, groupname, exdate): # Генерируем расписание на ближайшие две недели
+    """
+    Генерирует расписание для указанной группы на ближайшие две недели.
+    Эта функция выполняет следующие шаги:
+        1. Рассчитывает конечную дату семестра (май или февраль).
+        2. Проверяет, если дата мероприятия находится после текущей даты.
+        3. Вставляет события в базу данных, если их еще нет, исключая даты из списка `exdate`.
+    :param start_date: Начальная дата для создания расписания.
+    :param description: Описание предмета или задачи.
+    :param teacher: ФИО преподавателя.
+    :param location: Местоположение занятия.
+    :param groupname: Название группы.
+    :param exdate: Список дат исключений.
+    """
+
     current_date = datetime.now()
     if current_date.month > 1:  # Конец семестра: если после января, конец семестра - май
         end_of_semester = datetime(current_date.year, 6, 16)
