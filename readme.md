@@ -64,7 +64,7 @@ Additionally, the following built-in libraries are used:
 
    ```plaintext
    BOT_TOKEN=your_bot_token
-   DB_NAME=your_database_name
+   DATABASE_URL=your_database_name
    ```
 
 6. Run the script:
@@ -73,4 +73,4 @@ Additionally, the following built-in libraries are used:
    python main.py
    ```
 
-Kiezuna (Horikodji) kanon
+Just to make sure - Kiezuna (Horikodji) kanon
