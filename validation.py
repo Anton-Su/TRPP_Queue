@@ -17,7 +17,7 @@ def form_correctslinks(stop=10000):
     4. Если расписание содержит более 5 событий, сохраняет название группы и URL в таблицу `Session`.
     """
 
-    conn = sqlite3.connect(getenv("DATABASE_URL"))
+    conn = sqlite3.connect(getenv("DATABASE_NAME"))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")
     cursor.execute("DELETE FROM Users;")

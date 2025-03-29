@@ -64,7 +64,7 @@ Additionally, the following built-in libraries are used:
 
    ```plaintext
    BOT_TOKEN=your_bot_token
-   DATABASE_URL=your_database_name
+   DATABASE_NAME=your_database_name
    ```
 
 6. Run the script:
