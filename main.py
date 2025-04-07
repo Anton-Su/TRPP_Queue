@@ -44,7 +44,6 @@ class RegisterState(StatesGroup):
     - surname: Ввод фамилии пользователя.
     - middle_name: Ввод отчества пользователя.
     """
-
     group = State()
     name = State()
     surname = State()
@@ -56,7 +55,6 @@ async def dindin():
     Заглушка для обработки начала занятия.
     - Вызывается по расписанию в указанное время.
     """
-
     print("Пары в период такой-то начались")
     pass
 
@@ -66,7 +64,6 @@ async def dandalan():
     Заглушка для обработки конца занятия.
     - Вызывается по расписанию через 90 (+10) минут после начала занятия.
     """
-
     print("Пары в период такой-то закончились")
     pass
 
@@ -76,7 +73,6 @@ async def generate_calendar(raspisanie): # Функция для генерац�
     Генерирует inline-клавиатуру с датами на основе переданного расписания.
     Возвращает Inline-клавиатуру с кнопками дат и кнопкой закрытия.
     """
-
     days_of_week = {
         "Monday": "Понедельник",
         "Tuesday": "Вторник",
@@ -109,7 +105,6 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     1. `dindin` запускается в указанное время.
     2. `dandalan` запускается через 90 минут после первой.
     """
-
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     current_date = datetime.now()
@@ -129,14 +124,14 @@ async def generatescheduler_to_currect_day(): # установка будиль�
 @dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Статистика"
 async def command_start_handler(message: Message) -> None:
     """Обрабатывает команду /stats, отправляя пользователю его график записей."""
-
     user_id = message.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     results = []
     year = datetime.now().year
     result = cursor.execute("""
-        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute, T.End_Hour, T.End_Minute, T.Location, O.Poryadok
+        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, 
+        T.Start_Minute, T.End_Hour, T.End_Minute, T.Location, O.Poryadok
         FROM Timetable T
         JOIN Ochered O ON T.Id = O.Numseance
         WHERE O.Id = ?
@@ -144,9 +139,13 @@ async def command_start_handler(message: Message) -> None:
     """, (user_id,)).fetchall()
     conn.commit()
     conn.close()
-    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite, end_hour, end_minute, location, Poryadok) in enumerate(result, start=1):
+    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite,
+                end_hour, end_minute, location, Poryadok) in enumerate(result, start=1):
         results.append(
-            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:{str(start_minite).rjust(2, '0')} - {str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}*\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
+            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}."
+            f"{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:"
+            f"{str(start_minite).rjust(2, '0')} - {str(end_hour).rjust(2, '0')}:"
+            f"{str(end_minute).rjust(2, '0')}*\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     if len(result) == 0:
         return await message.answer("На данный момент вы не записаны ни на одно занятие")
     results.append(f"\n* длительность занятия увеличена на 10 минут, чтобы учесть время перерыва, которое зачастую используется студентами")
@@ -164,17 +163,18 @@ async def command_start_handler(message: Message) -> None:
     - Удаляет пользователя из таблицы `Users`.
     - Если он был последним в группе, удаляет данные группы (`All_groups`, `Timetable`).
     """
-
     user_id = message.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
     count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (group,)).fetchall())
-    numseances = cursor.execute("SELECT DISTINCT Numseance FROM Ochered WHERE Id = ?", (user_id,)).fetchall() # Получаем все numseance, в которых пользователь был записан
+    numseances = cursor.execute("SELECT DISTINCT Numseance FROM Ochered WHERE Id = ?",
+                                (user_id,)).fetchall() # Получаем все numseance, в которых пользователь был записан
     cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
     # Пересчитываем порядок (Poryadok) для всех numseance, в которых был пользователь
     for (numseance,) in numseances:
-        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok """, (numseance,)).fetchall()
+        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok """,
+                                 (numseance,)).fetchall()
         for index, (record_id,) in enumerate(records, start=1):
             cursor.execute("UPDATE Ochered SET Poryadok = ? WHERE Id = ?", (index, record_id))
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
@@ -199,7 +199,6 @@ async def send_help(message: Message):
     """
     Обрабатывает команду /help, отправляет шуточное мотивационное сообщение.
     """
-
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
 
@@ -216,7 +215,6 @@ async def show_calendar(user_id: int, message: types.Message = None, callback: C
     - Генерирует интерактивную клавиатуру-календарь.
     - Отправляет или редактирует сообщение с календарем в зависимости от типа вызова (команда или callback-запрос).
     """
-
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()
@@ -257,13 +255,13 @@ async def show_schedule(callback: CallbackQuery):
     - Генерирует кнопки с предметами, их временем и местом проведения.
     - Позволяет пользователю выбрать предмет или вернуться к календарю.
     """
-
     selected_date = callback.data.split("_")[1]  # Дата в формате YYYY-MM-DD
     user_id = callback.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     groupname = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
-    subjects = cursor.execute("""SELECT Task, Start_Month, Start_Day, Start_Hour, Start_Minute, Location FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?""",
+    subjects = cursor.execute("""SELECT Task, Start_Month, Start_Day, Start_Hour, 
+    Start_Minute, Location FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?""",
                               (groupname, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
     conn.close()
     keyboard = []
@@ -290,12 +288,13 @@ async def handle_subject(callback: CallbackQuery):
     - Если записан, удаляет его из очереди и пересчитывает порядок (Poryadok).
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
-
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",(groupname, month, day, hour, minute, location)).fetchone()[0]
+    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
+                               "AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",
+                               (groupname, month, day, hour, minute, location)).fetchone()[0]
     result = cursor.execute("""SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?""", (numseance,)).fetchone()
     if result[0] is not None:
         new_poryadok = result[0] + 1 # Если записи найдены, result[0] будет наибольшим Poryadok
@@ -324,7 +323,6 @@ async def register(message: types.Message, state: FSMContext):
     - Проверяет, зарегистрирован ли пользователь в базе данных.
     - Если нет, запрашивает у пользователя название группы и переводит FSM в состояние RegisterState.group.
     """
-
     user_id = message.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -346,7 +344,6 @@ async def process_group(message: types.Message, state: FSMContext):
     - Если группа существует, запрашивает ввод имени пользователя.
     - Если группа не существует, отправляет ошибку и очищает состояние.
     """
-
     await state.update_data(group=message.text.upper())
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -365,7 +362,6 @@ async def process_name(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод имени пользователя и переходит к вводу фамилии.
     """
-
     await state.update_data(name=message.text.capitalize())
     await message.answer("Введите вашу фамилию:")
     await state.set_state(RegisterState.surname)
@@ -376,7 +372,6 @@ async def process_surname(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод фамилии пользователя и переходит к вводу отчества.
     """
-
     await state.update_data(surname=message.text.capitalize())
     await message.answer("Введите ваше отчество (если нет, напишите '-'): ")
     await state.set_state(RegisterState.middle_name)
@@ -390,7 +385,6 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     - Если группа еще не существует в таблице `All_groups`, добавляет группу и подгружает расписание.
     - Завершает регистрацию, отправляя сообщение пользователю и очищая состояние.
     """
-
     user_data = await state.get_data()
     middle_name = message.text.capitalize() if message.text != "-" else None
     conn = sqlite3.connect(DATABASE_NAME)

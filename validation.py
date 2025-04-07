@@ -5,7 +5,7 @@ import sqlite3
 from os import getenv
 from bs4 import BeautifulSoup
 
-#output_file = "valid_schedules.txt" # пока что будем сохранять типа в файле, потом в БД переведу
+#output_file = "valid_schedules.txt" # на случай сохранения в файле
 # base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
 
 

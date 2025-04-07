@@ -16,7 +16,6 @@ async def refresh_schedule(): # обновить расписание
     2. Для каждой группы извлекает URL, связанный с ней.
     3. Для каждой группы вызывает функцию `get_schedule`, чтобы обновить расписание.
     """
-
     conn = sqlite3.connect(getenv("DATABASE_NAME"))
     cursor = conn.cursor()
     groups = cursor.execute("SELECT GroupName FROM All_groups").fetchall()  # Получаем все строки в виде списка кортежей
@@ -40,7 +39,6 @@ async def get_schedule(url, groupname):
     1) url: URL, по которому доступно расписание группы в формате iCal;
     2) groupname: Название группы, для которой обновляется расписание.
     """
-
     response = requests.get(url, timeout=5)
     if response.status_code == 200:
         data = response.json()
@@ -50,7 +48,8 @@ async def get_schedule(url, groupname):
             schedule = schedule_info["iCalContent"]
             realschedule = Calendar.from_ical(schedule)
             for component in realschedule.walk():
-                if component.name == "VEVENT" and str(component.get('description')) and len(str(component.get('description')).split('\n')) == 2:
+                if (component.name == "VEVENT" and str(component.get('description'))
+                        and len(str(component.get('description')).split('\n')) == 2):
                     teacher_fio = str(component.get('description')).split('\n')[0].replace('Преподаватель: ', '')
                     dtstart = component.get('dtstart').dt
                     dtend = component.get('dtend').dt
@@ -59,7 +58,8 @@ async def get_schedule(url, groupname):
                     exdate = component.get('exdate').dts
                     exd = [i.dt.replace(tzinfo=None) for i in exdate] # список datetime исключений
                     # Передаём даты в виде объектов datetime
-                    await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None), summary, teacher_fio, location, groupname, exd)
+                    await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None),
+                                            summary, teacher_fio, location, groupname, exd)
     else:
         print(f"⚠ Ошибка {response.status_code} для {url}")
 
@@ -81,7 +81,6 @@ async def generate_schedule(start_date, end_date, description, teacher, location
     6) groupname: Название группы;
     7) exdate: Список дат исключений.
     """
-
     current_date = datetime.now()
     if current_date.month > 1:  # Конец семестра: если после января, конец семестра - май
         end_of_semester = datetime(current_date.year, 6, 16)
@@ -92,12 +91,17 @@ async def generate_schedule(start_date, end_date, description, teacher, location
     end_date += timedelta(minutes=peremen_minutes)
     while start_date <= end_of_semester:
         if current_date <= start_date:
-            exists = cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ? AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND LOCATION = ?""", (
+            exists = cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ?
+             AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? 
+             AND Start_Minute = ? AND LOCATION = ?""", (
             groupname, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute,
             location)).fetchone()
             if not exists and start_date not in exdate:
-                cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (groupname, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute, end_date.month, end_date.day, end_date.hour, end_date.minute, location))
+                cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, 
+                Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (groupname, teacher, description, start_date.month, start_date.day,
+                 start_date.hour, start_date.minute, end_date.month, end_date.day, end_date.hour, end_date.minute, location))
                 conn.commit()
             break
         # Добавляем 2 недели
