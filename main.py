@@ -71,7 +71,7 @@ async def dandalan():
     pass
 
 
-def generate_calendar(raspisanie): # Функция для генерации клавиатуры-календаря
+async def generate_calendar(raspisanie): # Функция для генерации клавиатуры-календаря
     """
     Генерирует inline-клавиатуру с датами на основе переданного расписания.
     Возвращает Inline-клавиатуру с кнопками дат и кнопкой закрытия.
@@ -228,7 +228,7 @@ async def show_calendar(user_id: int, message: types.Message = None, callback: C
         "SELECT DISTINCT Start_Month, Start_Day FROM Timetable WHERE GroupName = ? ORDER BY Start_Month , Start_Day ",
         (group[0],)).fetchall()
     conn.close()
-    keyboard = generate_calendar(raspisanie)
+    keyboard = await generate_calendar(raspisanie)
     if message: # Определяем, как отправить сообщение
         await message.answer("Определитесь с датой:", reply_markup=keyboard)
     elif callback:
