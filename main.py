@@ -136,19 +136,22 @@ async def command_start_handler(message: Message) -> None:
     results = []
     year = datetime.now().year
     result = cursor.execute("""
-        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute, T.Location, O.Poryadok
+        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute, T.End_Hour, T.End_Minute, T.Location, O.Poryadok
         FROM Timetable T
         JOIN Ochered O ON T.Id = O.Numseance
         WHERE O.Id = ?
         ORDER BY T.Start_Month , T.Start_Day , T.Start_Hour , T.Start_Minute
     """, (user_id,)).fetchall()
-    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite, location, Poryadok) in enumerate(result, start=1):
-        results.append(
-            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:{str(start_minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     conn.commit()
     conn.close()
-    results.insert(0, f'Всего активных записей: {len(results)}')
-    await message.answer("\n".join(results))
+    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite, end_hour, end_minute, location, Poryadok) in enumerate(result, start=1):
+        results.append(
+            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:{str(start_minite).rjust(2, '0')} - {str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}*\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
+    if len(result) == 0:
+        return await message.answer("На данный момент вы не записаны ни на одно занятие")
+    results.append(f"\n* длительность занятия увеличена на 10 минут, чтобы учесть время перерыва, которое зачастую используется студентами")
+    results.insert(0, f'Всего активных записей: {len(results) - 1}')
+    return await message.answer("\n".join(results))
 
 
 @dp.message(Command("exit"))  # Команда выйти из системы
