@@ -423,7 +423,7 @@ async def main_async() -> None: # Run the bot
     await delete_old_sessions()
     await refresh_schedule()
     await generatescheduler_to_currect_day() # начальные три действия
-    scheduler.add_job(refresh_schedule, day_of_week='sun', trigger='cron', hour=0, minute=30)
+    scheduler.add_job(refresh_schedule, trigger='cron', hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
     scheduler.add_job(generatescheduler_to_currect_day, trigger='cron', hour=7, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
