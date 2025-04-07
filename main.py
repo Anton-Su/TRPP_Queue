@@ -349,8 +349,7 @@ async def process_group(message: types.Message, state: FSMContext):
     cursor = conn.cursor()
     group_number = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
     conn.close()
-    url = await get_link_with_current_hash() + group_number
-    if not url:
+    if not group_number:
         await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
         await state.clear()
         return
