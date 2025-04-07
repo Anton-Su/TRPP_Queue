@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from os import getenv
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from validation import form_correctslinks
+from validation import form_correctslinks, get_link_with_current_hash
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from schedule import refresh_schedule, get_schedule
@@ -32,6 +32,7 @@ kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, котору
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
     ], resize_keyboard=True, one_time_keyboard=False)
+base_url = "https://schedule-of.mirea.ru/_next/data/qn8iqG0zLuQQBWlb9Vlws/index.json?s=1_"
 
 
 class RegisterState(StatesGroup):
@@ -63,7 +64,7 @@ async def dindin():
 async def dandalan():
     """
     Заглушка для обработки конца занятия.
-    - Вызывается по расписанию через 90 минут после начала занятия.
+    - Вызывается по расписанию через 90 (+10) минут после начала занятия.
     """
 
     print("Пары в период такой-то закончились")
@@ -112,16 +113,16 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     current_date = datetime.now()
-    hour_minute = cursor.execute("SELECT DISTINCT Hour, Minute FROM Timetable WHERE Month = ? AND Day = ?",
+    hour_minute = cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute, End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
                                  (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
     if hour_minute:
-        for hour, minute in hour_minute:
-            existing_job = scheduler.get_job(f"{hour}_{minute}")
+        for start_hour, start_minute, end_hour, end_minute in hour_minute:
+            existing_job = scheduler.get_job(f"{start_hour}_{start_minute}")
             if not existing_job: # если id такого не встречалось
-                start_date = datetime(current_date.year, current_date.month, current_date.day, hour, minute)
-                end_date = start_date + timedelta(minutes=90)
-                scheduler.add_job(dindin, 'date', run_date=start_date, id=f"{hour}_{minute}")
-                scheduler.add_job(dandalan, 'date', run_date=end_date, id=f"{end_date.hour}_{end_date.minute}")
+                start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
+                end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
+                scheduler.add_job(dindin, 'date', run_date=start_date, id=f"{start_hour}_{start_minute}")
+                scheduler.add_job(dandalan, 'date', run_date=end_date, id=f"{end_hour}_{end_minute}")
 
 
 @dp.message(Command("stats")) # Команда посмотреть статистику
@@ -135,15 +136,15 @@ async def command_start_handler(message: Message) -> None:
     results = []
     year = datetime.now().year
     result = cursor.execute("""
-        SELECT T.Task, T.TeacherFIO, T.Month, T.Day, T.Hour, T.Minute, T.Location, O.Poryadok
+        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute, T.Location, O.Poryadok
         FROM Timetable T
         JOIN Ochered O ON T.Id = O.Numseance
         WHERE O.Id = ?
-        ORDER BY T.Month ASC, T.Day ASC, T.Hour ASC, T.Minute ASC
+        ORDER BY T.Start_Month , T.Start_Day , T.Start_Hour , T.Start_Minute
     """, (user_id,)).fetchall()
-    for index, (subject, teacherfio, month, date, hour, minite, location, Poryadok) in enumerate(result, start=1):
+    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite, location, Poryadok) in enumerate(result, start=1):
         results.append(
-            f"{index}. {Poryadok} место в очереди, {str(date).rjust(2, '0')}.{str(month).rjust(2, '0')}.{year} {str(hour).rjust(2, '0')}:{str(minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
+            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:{str(start_minite).rjust(2, '0')}\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
     conn.commit()
     conn.close()
     results.insert(0, f'Всего активных записей: {len(results)}')
@@ -170,7 +171,7 @@ async def command_start_handler(message: Message) -> None:
     cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
     # Пересчитываем порядок (Poryadok) для всех numseance, в которых был пользователь
     for (numseance,) in numseances:
-        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok ASC""", (numseance,)).fetchall()
+        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok """, (numseance,)).fetchall()
         for index, (record_id,) in enumerate(records, start=1):
             cursor.execute("UPDATE Ochered SET Poryadok = ? WHERE Id = ?", (index, record_id))
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
@@ -221,7 +222,7 @@ async def show_calendar(user_id: int, message: types.Message = None, callback: C
             return await message.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
         return await callback.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
     raspisanie = cursor.execute(
-        "SELECT DISTINCT Month, Day FROM Timetable WHERE GroupName = ? ORDER BY Month ASC, Day ASC",
+        "SELECT DISTINCT Start_Month, Start_Day FROM Timetable WHERE GroupName = ? ORDER BY Start_Month , Start_Day ",
         (group[0],)).fetchall()
     conn.close()
     keyboard = generate_calendar(raspisanie)
@@ -259,7 +260,7 @@ async def show_schedule(callback: CallbackQuery):
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     groupname = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
-    subjects = cursor.execute("""SELECT Task, Month, Day, Hour, Minute, Location FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ?""",
+    subjects = cursor.execute("""SELECT Task, Start_Month, Start_Day, Start_Hour, Start_Minute, Location FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?""",
                               (groupname, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
     conn.close()
     keyboard = []
@@ -291,7 +292,7 @@ async def handle_subject(callback: CallbackQuery):
     user_id = callback.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Month = ? AND Day = ? AND Hour = ? AND Minute = ? AND Location = ?",(groupname, month, day, hour, minute, location)).fetchone()[0]
+    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",(groupname, month, day, hour, minute, location)).fetchone()[0]
     result = cursor.execute("""SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?""", (numseance,)).fetchone()
     if result[0] is not None:
         new_poryadok = result[0] + 1 # Если записи найдены, result[0] будет наибольшим Poryadok
@@ -300,7 +301,7 @@ async def handle_subject(callback: CallbackQuery):
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
         # Получаем все оставшиеся записи, отсортированные по Poryadok
-        records = cursor.execute("""SELECT Id FROM Ochered WHERE numseance = ? ORDER BY Poryadok ASC""", (numseance,)).fetchall()
+        records = cursor.execute("""SELECT Id FROM Ochered WHERE numseance = ? ORDER BY Poryadok """, (numseance,)).fetchall()
         for index, (record_id,) in enumerate(records, start=1): # Пересчитываем Poryadok заново
             cursor.execute("""UPDATE Ochered SET Poryadok = ? WHERE Id = ?""", (index, record_id))
         conn.commit()
@@ -346,8 +347,9 @@ async def process_group(message: types.Message, state: FSMContext):
     await state.update_data(group=message.text.upper())
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    url = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
+    group_number = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
     conn.close()
+    url = await get_link_with_current_hash() + group_number
     if not url:
         await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
         await state.clear()
@@ -398,7 +400,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
         cursor.execute("""INSERT INTO All_groups (GroupName) VALUES (?)""", (user_data['group'],))
         conn.commit()
         cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
-        url = cursor.fetchone()[0]
+        url = await get_link_with_current_hash() + cursor.fetchone()[0]
         await get_schedule(url, user_data['group'])
         await generatescheduler_to_currect_day()
     conn.close()
@@ -418,16 +420,17 @@ async def main_async() -> None: # Run the bot
     - `generatescheduler_to_currect_day`: генерирует будильники на текущий день.
     - Регулярные задачи:
     - Обновление расписания каждое воскресенье в 00:30.
-    - Генерация правильных ссылок 1 сентября в 00:30.
-    - Генерация будильников на текущий день каждый день в 07:30.
+    - Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
+    - Генерация расписания пар на текущий день каждый день в 07:30.
     """
-
+    #await form_correctslinks(await get_link_with_current_hash())
     await delete_old_sessions()
     await refresh_schedule()
     await generatescheduler_to_currect_day() # начальные три действия
     scheduler.add_job(refresh_schedule, day_of_week='sun', trigger='cron', hour=0, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30)
+    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
     scheduler.add_job(generatescheduler_to_currect_day, trigger='cron', hour=7, minute=30)
+    scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
     scheduler.start()
     await dp.start_polling(bot)
 

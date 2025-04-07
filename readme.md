@@ -15,6 +15,7 @@ For this project, which is built using Python 3.11, the following external libra
 - `requests` — for making HTTP requests  
 - `icalendar` — for handling data in iCal format  
 - `dotenv` — for working with environment variables
+- `beautifulsoup4` — for parsing HTML and XML documents
 
 Additionally, the following built-in libraries are used:
 
@@ -23,6 +24,7 @@ Additionally, the following built-in libraries are used:
 - `datetime` — for working with dates and times  
 - `asyncio` — for working with asynchronous code  
 - `logging` — for logging
+- `json` — for working with JSON data
 
 ## Installation and Setup
 

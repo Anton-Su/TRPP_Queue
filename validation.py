@@ -1,22 +1,35 @@
+import json
 from icalendar import Calendar
 import requests
 import sqlite3
 from os import getenv
+from bs4 import BeautifulSoup
 
 #output_file = "valid_schedules.txt" # пока что будем сохранять типа в файле, потом в БД переведу
-base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
+# base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
 
 
-def form_correctslinks(stop=10000):
+async def get_link_with_current_hash():
+    """
+    Получает действительную базовую ссылку на расписание с текущим хэшем.
+    """
+    url = 'https://schedule-of.mirea.ru/'
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    script = soup.find('script', id='__NEXT_DATA__')
+    json_data = json.loads(script.string)
+    return f'https://schedule-of.mirea.ru/_next/data/{json_data.get('buildId')}/index.json?s=1_'
+
+
+async def form_correctslinks(base_url, stop=10000):
     """
     Формирует правильные ссылки и записывает данные о группах и расписаниях в базу данных.
     Функция выполняет следующие действия:
     1. Очищает таблицы базы данных: `Session`, `Users`, `Ochered`, `All_groups`, `Timetable`.
     2. Для каждого URL, сгенерированного на основе числа от 0 до `stop`, выполняет HTTP-запрос.
     3. Если ответ успешен (код 200), извлекает информацию о расписании в формате iCal и преобразует его.
-    4. Если расписание содержит более 5 событий, сохраняет название группы и URL в таблицу `Session`.
+    4. Если расписание содержит более 5 событий, считается, что у этой группы есть занятия, название группы и URL сохранются в таблицу `Session`.
     """
-
     conn = sqlite3.connect(getenv("DATABASE_NAME"))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")
@@ -37,7 +50,7 @@ def form_correctslinks(stop=10000):
                     schedule = schedule_info[0]["iCalContent"]
                     realschedule = Calendar.from_ical(schedule)
                     if len(realschedule.walk()) > 5: # расписание реально дано
-                        cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)",(group, url))
+                        cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)",(group, i)) # так как хэш временный, мы не может сохранить всё, сохраним только последние цифры
                         #f.write(group + '?' + url + '\n')
             else:
                 print(f"⚠ Ошибка {response.status_code} для {url}")
