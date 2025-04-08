@@ -18,7 +18,7 @@ async def get_link_with_current_hash():
     soup = BeautifulSoup(response.text, 'html.parser')
     script = soup.find('script', id='__NEXT_DATA__')
     json_data = json.loads(script.string)
-    return f'https://schedule-of.mirea.ru/_next/data/{json_data.get('buildId')}/index.json?s=1_'
+    return f"https://schedule-of.mirea.ru/_next/data/{json_data.get('buildId')}/index.json?s=1_"
 
 
 async def form_correctslinks(base_url, stop=10000):
