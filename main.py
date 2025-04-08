@@ -32,7 +32,6 @@ kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, котору
     keyboard=[
         [KeyboardButton(text="Помощь"), KeyboardButton(text="Регистрация")]
     ], resize_keyboard=True, one_time_keyboard=False)
-base_url = "https://schedule-of.mirea.ru/_next/data/qn8iqG0zLuQQBWlb9Vlws/index.json?s=1_"
 
 
 class RegisterState(StatesGroup):
