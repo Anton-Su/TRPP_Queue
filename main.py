@@ -128,28 +128,38 @@ async def command_start_handler(message: Message) -> None:
     cursor = conn.cursor()
     results = []
     year = datetime.now().year
+    # Запрос с динамическим расчетом актуальной позиции
     result = cursor.execute("""
-        SELECT T.Task, T.TeacherFIO, T.Start_Month, T.Start_Day, T.Start_Hour, 
-        T.Start_Minute, T.End_Hour, T.End_Minute, T.Location, O.Poryadok
+        SELECT T.Task,  T.TeacherFIO, T.Start_Month, 
+            T.Start_Day, T.Start_Hour, T.Start_Minute, 
+            T.End_Hour,  T.End_Minute, T.Location,
+            (
+                SELECT COUNT(*) + 1
+                FROM Ochered O2
+                WHERE O2.Numseance = O.Numseance
+                AND O2.Poryadok < O.Poryadok
+            ) AS ActualPosition
         FROM Timetable T
         JOIN Ochered O ON T.Id = O.Numseance
         WHERE O.Id = ?
-        ORDER BY T.Start_Month , T.Start_Day , T.Start_Hour , T.Start_Minute
+        ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
     """, (user_id,)).fetchall()
-    conn.commit()
     conn.close()
-    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minite,
-                end_hour, end_minute, location, Poryadok) in enumerate(result, start=1):
+    for index, (subject, teacherfio, start_month, start_date, start_hour, start_minute,
+                end_hour, end_minute, location, actual_position) in enumerate(result, start=1):
+        # Форматирование даты и времени
+        start_time = f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} " \
+                     f"{str(start_hour).rjust(2, '0')}:{str(start_minute).rjust(2, '0')}"
+        end_time = f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}"
         results.append(
-            f"{index}. {Poryadok} место в очереди, {str(start_date).rjust(2, '0')}."
-            f"{str(start_month).rjust(2, '0')}.{year} {str(start_hour).rjust(2, '0')}:"
-            f"{str(start_minite).rjust(2, '0')} - {str(end_hour).rjust(2, '0')}:"
-            f"{str(end_minute).rjust(2, '0')}*\n«{subject}», проходит в «{location}», ведёт {teacherfio}")
-    if len(result) == 0:
+            f"{index}. {actual_position} место в очереди, {start_time} - {end_time}*\n"
+            f"«{subject}», проходит в «{location}», ведёт {teacherfio}"
+        )
+    if not result:
         return await message.answer("На данный момент вы не записаны ни на одно занятие")
-    results.append(f"\n* длительность занятия увеличена на 10 минут, чтобы учесть время перерыва, которое зачастую используется студентами")
-    results.insert(0, f'Всего активных записей: {len(results) - 1}')
-    return await message.answer("\n".join(results))
+    results.append("\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва")
+    results.insert(0, f'Всего активных записей: {len(result)}')
+    await message.answer("\n".join(results))
 
 
 @dp.message(Command("exit"))  # Команда выйти из системы
@@ -157,8 +167,7 @@ async def command_start_handler(message: Message) -> None:
 async def command_start_handler(message: Message) -> None:
     """
     Обрабатывает выход пользователя из системы и удаляет его данные.
-    - Удаляет пользователя из очереди (`Ochered`).
-    - Пересчитывает порядок (`Poryadok`) в очереди для всех сеансов, где он был записан.
+    - Удаляет пользователя из всех очередей (таблицы `Ochered`).
     - Удаляет пользователя из таблицы `Users`.
     - Если он был последним в группе, удаляет данные группы (`All_groups`, `Timetable`).
     """
@@ -166,16 +175,8 @@ async def command_start_handler(message: Message) -> None:
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    count = len(cursor.execute("SELECT Id FROM Users WHERE GroupName = ?", (group,)).fetchall())
-    numseances = cursor.execute("SELECT DISTINCT Numseance FROM Ochered WHERE Id = ?",
-                                (user_id,)).fetchall() # Получаем все numseance, в которых пользователь был записан
+    count = cursor.execute("SELECT COUNT(*) FROM Users WHERE GroupName = ?", (group,)).fetchone()[0]
     cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
-    # Пересчитываем порядок (Poryadok) для всех numseance, в которых был пользователь
-    for (numseance,) in numseances:
-        records = cursor.execute("""SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok """,
-                                 (numseance,)).fetchall()
-        for index, (record_id,) in enumerate(records, start=1):
-            cursor.execute("UPDATE Ochered SET Poryadok = ? WHERE Id = ?", (index, record_id))
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
     if count == 1: # Если он был последним участником группы, удаляем все данные группы
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
@@ -284,7 +285,7 @@ async def handle_subject(callback: CallbackQuery):
     Обрабатывает выбор предмета пользователем.
     - Извлекает информацию о выбранном предмете из callback-запроса.
     - Определяет, записан ли пользователь на этот предмет.
-    - Если записан, удаляет его из очереди и пересчитывает порядок (Poryadok).
+    - Если записан, удаляет его из очереди.
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
@@ -301,17 +302,13 @@ async def handle_subject(callback: CallbackQuery):
         new_poryadok = 1
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
-        # Получаем все оставшиеся записи, отсортированные по Poryadok
-        records = cursor.execute("""SELECT Id FROM Ochered WHERE numseance = ? ORDER BY Poryadok """, (numseance,)).fetchall()
-        for index, (record_id,) in enumerate(records, start=1): # Пересчитываем Poryadok заново
-            cursor.execute("""UPDATE Ochered SET Poryadok = ? WHERE Id = ?""", (index, record_id))
         conn.commit()
         conn.close()
         return await callback.answer("Запись отменена!")
     cursor.execute("""INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)""", (numseance, user_id, new_poryadok))
     conn.commit()
+    await callback.answer(f"Успешно! Ваш номер в очереди: {cursor.execute("SELECT COUNT(*) FROM Ochered WHERE Numseance = ?", (numseance,)).fetchone()[0]}")
     conn.close()
-    await callback.answer(f"Успешно! Ваш номер в очереди: {new_poryadok}")
 
 
 @dp.message(Command("register")) # Обработчик команды /register
