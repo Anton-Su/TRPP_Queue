@@ -49,13 +49,19 @@ class RegisterState(StatesGroup):
     middle_name = State()
 
 
-async def dindin():
+async def dindin(hour: int, minute: int):
     """
-    Заглушка для обработки начала занятия.
-    - Вызывается по расписанию в указанное время.
+    Фф-я для обработки начала занятия.
+    - Вызывается по расписанию в указанное время. Устраивает спам-рассылку с очередью.
     """
-    print("Пары в период такой-то начались")
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    _class = cursor.execute('SELECT Task FROM Timetable WHERE ')
+
+
     pass
+
+
 
 
 async def dandalan():
@@ -115,8 +121,14 @@ async def generatescheduler_to_currect_day(): # установка будиль�
             if not existing_job: # если id такого не встречалось
                 start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
                 end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
-                scheduler.add_job(dindin, 'date', run_date=start_date, id=f"{start_hour}_{start_minute}")
-                scheduler.add_job(dandalan, 'date', run_date=end_date, id=f"{end_hour}_{end_minute}")
+                scheduler.add_job(dindin, 'date',
+                                  kwargs={"month": start_date.month ,"date": start_date.day,
+                                          "hour": start_hour, "minute": start_minute},
+                                  run_date=start_date, id=f"{start_hour}_{start_minute}")
+                scheduler.add_job(dandalan, 'date',
+                                  kwargs={"month": start_date.month, "date": start_date.day,
+                                          "hour": start_hour, "minute": start_minute},
+                                  run_date=end_date, id=f"{end_hour}_{end_minute}")
 
 
 @dp.message(Command("stats")) # Команда посмотреть статистику
@@ -199,6 +211,7 @@ async def send_help(message: Message):
     Обрабатывает команду /help, отправляет шуточное мотивационное сообщение.
     """
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
+    #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
 
 
