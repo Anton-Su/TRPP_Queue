@@ -54,7 +54,7 @@ async def get_schedule(url, groupname):
                     dtstart = component.get('dtstart').dt
                     dtend = component.get('dtend').dt
                     summary = component.get('summary').replace('ПР ', "", 1)
-                    location = component.get('location')
+                    location = component.get('location').strip('Дистанционно ')
                     exdate = component.get('exdate').dts
                     exd = [i.dt.replace(tzinfo=None) for i in exdate] # список datetime исключений
                     # Передаём даты в виде объектов datetime

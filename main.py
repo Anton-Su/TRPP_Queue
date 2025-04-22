@@ -1,9 +1,12 @@
 from datetime import datetime
 from os import getenv
+
+import aiogram.enums.chat_member_status
+from aiogram.enums import ChatMemberStatus
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, BotCommand
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks, get_link_with_current_hash
 from aiogram.fsm.context import FSMContext
@@ -49,22 +52,23 @@ class RegisterState(StatesGroup):
     middle_name = State()
 
 
-async def dindin(hour: int, minute: int):
+async def dindin(month: int, date: int,hour: int, minute: int):
     """
     Фф-я для обработки начала занятия.
     - Вызывается по расписанию в указанное время. Устраивает спам-рассылку с очередью.
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    _class = cursor.execute('SELECT Task FROM Timetable WHERE ')
+    _class = cursor.execute(f'SELECT Id FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?',
+                            (month, date, hour, minute))
 
 
+    conn.close()
     pass
 
 
 
-
-async def dandalan():
+async def dandalan(month: int, date: int,hour: int, minute: int):
     """
     Заглушка для обработки конца занятия.
     - Вызывается по расписанию через 90 (+10) минут после начала занятия.
@@ -129,6 +133,45 @@ async def generatescheduler_to_currect_day(): # установка будиль�
                                   kwargs={"month": start_date.month, "date": start_date.day,
                                           "hour": start_hour, "minute": start_minute},
                                   run_date=end_date, id=f"{end_hour}_{end_minute}")
+
+
+@dp.message(Command("link"))
+async def link(message: Message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    thread_id = message.message_thread_id
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    try:
+        user_group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?",(user_id,)).fetchone()[0]
+        if cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?",(user_group,)).fetchall():
+            return message.answer(f"{user_group} уже привязан!")
+        cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = ? WHERE GroupName = ?", (chat_id,thread_id,user_group,))
+    except TypeError:
+        return message.answer("Вы не зарегестрированы.")
+    conn.commit()
+    conn.close()
+    return message.answer(f"{chat_id}/{thread_id} привязан к группе {user_group}.")
+
+@dp.message(Command("unlink"))
+async def unlink(message: Message):
+    member = await bot.get_chat_member(message.chat.id, message.from_user.id)
+    if member.status in ("creator", "administrator"):
+        try:
+            chat_id = message.chat.id
+            conn = sqlite3.connect(DATABASE_NAME)
+            cursor = conn.cursor()
+            try:
+                group_name = cursor.execute("SELECT GroupName FROM All_groups WHERE group_id = ?",(chat_id,)).fetchone()[0]
+                cursor.execute("UPDATE All_groups SET group_id = Null, thread_id = Null WHERE group_id = ?", (chat_id,))
+            except TypeError:
+                return message.answer("Вы не зарегестрированы.")
+            conn.commit()
+            conn.close()
+            return message.answer(f"{chat_id} отвязан от {group_name}.")
+        except TypeError:
+            return message.answer(f"А чат вообще был к чему-то привязан?")
+    return message.answer(f"Вы не админ!")
 
 
 @dp.message(Command("stats")) # Команда посмотреть статистику
@@ -432,6 +475,10 @@ async def main_async() -> None: # Run the bot
     - Генерация расписания пар на текущий день каждый день в 07:30.
     """
     #await form_correctslinks(await get_link_with_current_hash())
+    await bot.set_my_commands([
+        BotCommand(command="/link", description="Привязать бота к чату"),
+        BotCommand(command="/unlink", description="Отвязать бота от чата"),
+    ])
     await delete_old_sessions()
     await refresh_schedule()
     await generatescheduler_to_currect_day() # начальные три действия
