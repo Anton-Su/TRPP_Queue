@@ -144,7 +144,7 @@ async def link(message: Message):
     cursor = conn.cursor()
     try:
         user_group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?",(user_id,)).fetchone()[0]
-        if cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?",(user_group,)).fetchall():
+        if cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?",(user_group,)).fetchone()[0]:
             return message.answer(f"{user_group} уже привязан!")
         cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = ? WHERE GroupName = ?", (chat_id,thread_id,user_group,))
     except TypeError:
@@ -157,20 +157,21 @@ async def link(message: Message):
 async def unlink(message: Message):
     member = await bot.get_chat_member(message.chat.id, message.from_user.id)
     if member.status in ("creator", "administrator"):
+        chat_id = message.chat.id
+        conn = sqlite3.connect(DATABASE_NAME)
+        cursor = conn.cursor()
         try:
-            chat_id = message.chat.id
-            conn = sqlite3.connect(DATABASE_NAME)
-            cursor = conn.cursor()
-            try:
-                group_name = cursor.execute("SELECT GroupName FROM All_groups WHERE group_id = ?",(chat_id,)).fetchone()[0]
-                cursor.execute("UPDATE All_groups SET group_id = Null, thread_id = Null WHERE group_id = ?", (chat_id,))
-            except TypeError:
-                return message.answer("Вы не зарегестрированы.")
-            conn.commit()
-            conn.close()
-            return message.answer(f"{chat_id} отвязан от {group_name}.")
+            cursor.execute("SELECT Id from Users WHERE Id = ?",(message.from_user.id,))
         except TypeError:
-            return message.answer(f"А чат вообще был к чему-то привязан?")
+            return message.answer("Вы не зарегистрированы.")
+        try:
+            group_name = cursor.execute("SELECT GroupName FROM All_groups WHERE group_id = ?",(chat_id,)).fetchone()[0]
+            cursor.execute("UPDATE All_groups SET group_id = Null, thread_id = Null WHERE group_id = ?", (chat_id,))
+        except TypeError:
+            return message.answer("А чат вообще был к чему-то привязан?")
+        conn.commit()
+        conn.close()
+        return message.answer(f"{chat_id} отвязан от {group_name}.")
     return message.answer(f"Вы не админ!")
 
 
