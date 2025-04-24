@@ -59,8 +59,25 @@ async def dindin(month: int, date: int,hour: int, minute: int):
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    _class = cursor.execute(f'SELECT Id FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?',
-                            (month, date, hour, minute))
+    _class = cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?',
+                            (month, date, hour, minute)).fetchall()
+    for i in _class:
+        chat_id_thread = cursor.execute(f'SELECT group_id, thread_id FROM All_groups Where GroupName = "{i.GroupName}"').fetchall()
+        keyboard =  InlineKeyboardMarkup(
+            inline_keyboard=[
+                #TODO: сделать обработчики комманд
+                [InlineKeyboardButton(text="Записаться", url=f"https://t.me/{await bot.get_me().username}?start={i.Id}"),
+                  InlineKeyboardButton(text="Подтвердить ответ", callback_data=f"pass_command_inline"),]
+            ]
+        )
+        #TODO: добавить список юзеров
+
+        await bot.send_message(chat_id=chat_id_thread.group_id, message_thread_id=chat_id_thread.thread_id,
+                               text=f"""Началось занятие: {i.Task}!
+Действующая очередь:"""
+                               , reply_markup=keyboard)
+
+
 
 
     conn.close()
