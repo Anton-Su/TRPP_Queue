@@ -134,6 +134,10 @@ async def generatescheduler_to_currect_day(): # установка будиль�
                                           "hour": start_hour, "minute": start_minute},
                                   run_date=end_date, id=f"{end_hour}_{end_minute}")
 
+@dp.message(Command("pass"))
+async def pass_command(message: Message):
+    pass
+
 
 @dp.message(Command("link"))
 async def link(message: Message):
