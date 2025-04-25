@@ -631,7 +631,7 @@ async def handle_subject(callback: CallbackQuery):
         return await callback.answer("Запись отменена!")
     cursor.execute("""INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)""", (numseance, user_id, new_poryadok))
     conn.commit()
-    await callback.answer(f"Успешно! Ваш номер в очереди: {cursor.execute("SELECT COUNT(*) FROM Ochered WHERE Numseance = ?", (numseance,)).fetchone()[0]}")
+    await callback.answer(f"Успешно! Ваш номер в очереди: {cursor.execute('SELECT COUNT(*) FROM Ochered WHERE Numseance = ?', (numseance,)).fetchone()[0]}")
     conn.close()
 
 
