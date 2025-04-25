@@ -350,7 +350,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
             return await bot.leave_chat(chat_id)
         except Exception:
             # Бот не состоит в группе или не имеет доступа (ЗАБАНИЛИ)
-            cursor.execute("UPDATE All_groups SET group_id = ?, WHERE GroupName = ?",(chat_id, user_group,))
+            cursor.execute("UPDATE All_groups SET group_id = ? WHERE GroupName = ?",(chat_id, user_group,))
             conn.commit()
             conn.close()
             return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
