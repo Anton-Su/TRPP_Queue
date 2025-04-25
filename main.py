@@ -1,17 +1,12 @@
 from datetime import datetime
 from os import getenv
 import re
-import aiogram.enums.chat_member_status
-from aiogram.enums import ChatMemberStatus
 from aiogram.types import ChatMemberUpdated
-from aiogram.filters import ChatMemberUpdatedFilter
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, BotCommand
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-import schedule
 from validation import form_correctslinks, get_link_with_current_hash
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
