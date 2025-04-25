@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+
+<html lang="rus" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>main &#8212; TRPP_Queue 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=861a6e44"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <p>This is the main page of the documentation.</p>
+<section id="module-main">
+<span id="main"></span><h1>main<a class="headerlink" href="#module-main" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="main.RegisterState">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">RegisterState</span></span><a class="headerlink" href="#main.RegisterState" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StatesGroup</span></code></p>
+<p>Класс состояний для регистрации пользователя в FSM (Finite State Machine).
+Содержит следующие состояния:
+- group: Ввод группы пользователя.
+- name: Ввод имени пользователя.
+- surname: Ввод фамилии пользователя.
+- middle_name: Ввод отчества пользователя.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="main.RegisterState.group">
+<span class="sig-name descname"><span class="pre">group</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;State</span> <span class="pre">'RegisterState:group'&gt;</span></em><a class="headerlink" href="#main.RegisterState.group" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="main.RegisterState.middle_name">
+<span class="sig-name descname"><span class="pre">middle_name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;State</span> <span class="pre">'RegisterState:middle_name'&gt;</span></em><a class="headerlink" href="#main.RegisterState.middle_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="main.RegisterState.name">
+<span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;State</span> <span class="pre">'RegisterState:name'&gt;</span></em><a class="headerlink" href="#main.RegisterState.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="main.RegisterState.surname">
+<span class="sig-name descname"><span class="pre">surname</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;State</span> <span class="pre">'RegisterState:surname'&gt;</span></em><a class="headerlink" href="#main.RegisterState.surname" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.back_to_calendar">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">back_to_calendar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">callback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CallbackQuery</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.back_to_calendar" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.command_start_handler">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">command_start_handler</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#main.command_start_handler" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает команду /record, вызывая функцию для отображения календаря.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.dandalan">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">dandalan</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#main.dandalan" title="Link to this definition">¶</a></dt>
+<dd><p>Заглушка для обработки конца занятия.
+- Вызывается по расписанию через 90 (+10) минут после начала занятия.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.dindin">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">dindin</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#main.dindin" title="Link to this definition">¶</a></dt>
+<dd><p>Заглушка для обработки начала занятия.
+- Вызывается по расписанию в указанное время.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.generate_calendar">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">generate_calendar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raspisanie</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.generate_calendar" title="Link to this definition">¶</a></dt>
+<dd><p>Генерирует inline-клавиатуру с датами на основе переданного расписания.
+Возвращает Inline-клавиатуру с кнопками дат и кнопкой закрытия.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.generatescheduler_to_currect_day">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">generatescheduler_to_currect_day</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#main.generatescheduler_to_currect_day" title="Link to this definition">¶</a></dt>
+<dd><p>Устанавливает будильники (запланированные задачи) на текущий день, используя расписание из базы данных.
+- Подключается к базе данных и получает время запланированных событий.
+- Проверяет, существуют ли уже задачи с таким временем.
+- Если задачи нет, создаёт две задачи:
+1. <cite>dindin</cite> запускается в указанное время.
+2. <cite>dandalan</cite> запускается через 90 минут после первой.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.handle_subject">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">handle_subject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">callback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CallbackQuery</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.handle_subject" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает выбор предмета пользователем.
+- Извлекает информацию о выбранном предмете из callback-запроса.
+- Определяет, записан ли пользователь на этот предмет.
+- Если записан, удаляет его из очереди и пересчитывает порядок (Poryadok).
+- Если не записан, добавляет его в очередь с новым порядковым номером.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.main">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#main.main" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.main_async">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">main_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#main.main_async" title="Link to this definition">¶</a></dt>
+<dd><p>Основная асинхронная функция для запуска бота и настройки задач.
+- Выполняет начальные действия, такие как удаление старых сессий, обновление расписания и генерация будильников для текущего дня.
+- Добавляет задачи в планировщик для регулярного обновления расписания и выполнения других задач в заданное время.
+- Запускает основной цикл бота, который обрабатывает сообщения от пользователей.
+Моментальные задачи:
+- <cite>delete_old_sessions</cite>: удаляет старые сессии.
+- <cite>refresh_schedule</cite>: обновляет расписание.
+- <cite>generatescheduler_to_currect_day</cite>: генерирует будильники на текущий день.
+- Регулярные задачи:
+- Обновление расписания каждое воскресенье в 00:30.
+- Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
+- Генерация расписания пар на текущий день каждый день в 07:30.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.process_group">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">process_group</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FSMContext</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.process_group" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает ввод группы пользователя и проверяет ее наличие в базе данных.
+- Получает введенную пользователем группу.
+- Проверяет, существует ли группа в базе данных.
+- Если группа существует, запрашивает ввод имени пользователя.
+- Если группа не существует, отправляет ошибку и очищает состояние.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.process_middle_name">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">process_middle_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FSMContext</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.process_middle_name" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает ввод отчества пользователя, сохраняет данные в базе и завершает регистрацию.
+- После успешного ввода отчества сохраняет все данные пользователя в таблице <cite>Users</cite>.
+- Если группа еще не существует в таблице <cite>All_groups</cite>, добавляет группу и подгружает расписание.
+- Завершает регистрацию, отправляя сообщение пользователю и очищая состояние.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.process_name">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">process_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FSMContext</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.process_name" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает ввод имени пользователя и переходит к вводу фамилии.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.process_surname">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">process_surname</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FSMContext</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.process_surname" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает ввод фамилии пользователя и переходит к вводу отчества.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.register">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">FSMContext</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.register" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает команду /register.
+- Проверяет, зарегистрирован ли пользователь в базе данных.
+- Если нет, запрашивает у пользователя название группы и переводит FSM в состояние RegisterState.group.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.remove_keyboard">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">remove_keyboard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">callback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CallbackQuery</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.remove_keyboard" title="Link to this definition">¶</a></dt>
+<dd><p>Удаляет inline-клавиатуру после нажатия на кнопку &quot;удалить&quot;.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.send_help">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">send_help</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.send_help" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает команду /help, отправляет шуточное мотивационное сообщение.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.show_calendar">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">show_calendar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Message</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">callback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CallbackQuery</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.show_calendar" title="Link to this definition">¶</a></dt>
+<dd><p>Универсальная функция для отображения календаря пользователю.
+- Извлекает расписание (уникальные даты) из базы данных.
+- Генерирует интерактивную клавиатуру-календарь.
+- Отправляет или редактирует сообщение с календарем в зависимости от типа вызова (команда или callback-запрос).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="main.show_schedule">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">show_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">callback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">CallbackQuery</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#main.show_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Обрабатывает выбор даты пользователем и отображает расписание на этот день.
+- Извлекает выбранную дату из callback-запроса.
+- Получает расписание занятий для данной группы на выбранную дату.
+- Генерирует кнопки с предметами, их временем и местом проведения.
+- Позволяет пользователю выбрать предмет или вернуться к календарю.</p>
+</dd></dl>
+
+</section>
+<section id="module-deletion">
+<span id="deletion"></span><h1>deletion<a class="headerlink" href="#module-deletion" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="deletion.delete_old_sessions">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">deletion.</span></span><span class="sig-name descname"><span class="pre">delete_old_sessions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#deletion.delete_old_sessions" title="Link to this definition">¶</a></dt>
+<dd><p>Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
+Эта функция выполняет проверку всех записей в таблице <cite>Timetable</cite> и удаляет те, которые уже прошли по сравнению с текущим временем.
+Просроченные записи удаляются из таблиц <cite>Timetable</cite> и <cite>Ochered</cite>.</p>
+</dd></dl>
+
+</section>
+<section id="module-schedule">
+<span id="schedule"></span><h1>schedule<a class="headerlink" href="#module-schedule" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="schedule.generate_schedule">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">schedule.</span></span><span class="sig-name descname"><span class="pre">generate_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_date</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_date</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teacher</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">location</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exdate</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#schedule.generate_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Генерирует расписание для указанной группы на ближайшие две недели.
+Эта функция выполняет следующие шаги:
+1. Рассчитывает конечную дату семестра (май или февраль).
+2. Проверяет, если дата мероприятия находится после текущей даты.
+3. Вставляет события в базу данных, если их еще нет, исключая даты из списка <cite>exdate</cite>.</p>
+<p>Параметры:
+1) start_date: Начальная дата для создания расписания;
+2) end_date: Конечная дата для создания расписания;
+3) description: Описание предмета или задачи;
+4) teacher: ФИО преподавателя;
+5) location: Местоположение занятия;
+6) groupname: Название группы;
+7) exdate: Список дат исключений.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="schedule.get_schedule">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">schedule.</span></span><span class="sig-name descname"><span class="pre">get_schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupname</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#schedule.get_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Получает расписание для конкретной группы, парсит iCal контент и сохраняет его в базе данных.
+Функция выполняет следующие шаги:
+1. Отправляет HTTP-запрос на указанный URL для получения расписания.
+2. Извлекает расписание в формате iCal и парсит его.
+3. Для каждого события в расписании, если оно соответствует определенным критериям, передает данные в <cite>generate_schedule</cite>.</p>
+<p>Параметры:
+1) url: URL, по которому доступно расписание группы в формате iCal;
+2) groupname: Название группы, для которой обновляется расписание.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="schedule.refresh_schedule">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">schedule.</span></span><span class="sig-name descname"><span class="pre">refresh_schedule</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#schedule.refresh_schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Обновляет расписание для всех групп, используя URL, сохраненные в базе данных.
+Функция выполняет следующие шаги:
+1. Получает список всех групп из базы данных.
+2. Для каждой группы извлекает URL, связанный с ней.
+3. Для каждой группы вызывает функцию <cite>get_schedule</cite>, чтобы обновить расписание.</p>
+</dd></dl>
+
+</section>
+<section id="module-validation">
+<span id="validation"></span><h1>validation<a class="headerlink" href="#module-validation" title="Link to this heading">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="validation.form_correctslinks">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">validation.</span></span><span class="sig-name descname"><span class="pre">form_correctslinks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#validation.form_correctslinks" title="Link to this definition">¶</a></dt>
+<dd><p>Формирует правильные ссылки и записывает данные о группах и расписаниях в базу данных.
+Функция выполняет следующие действия:
+1. Очищает таблицы базы данных: <cite>Session</cite>, <cite>Users</cite>, <cite>Ochered</cite>, <cite>All_groups</cite>, <cite>Timetable</cite>.
+2. Для каждого URL, сгенерированного на основе числа от 0 до <cite>stop</cite>, выполняет HTTP-запрос.
+3. Если ответ успешен (код 200), извлекает информацию о расписании в формате iCal и преобразует его.
+4. Если расписание содержит более 5 событий, считается, что у этой группы есть занятия, название группы и URL сохранются в таблицу <cite>Session</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation.get_link_with_current_hash">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">validation.</span></span><span class="sig-name descname"><span class="pre">get_link_with_current_hash</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#validation.get_link_with_current_hash" title="Link to this definition">¶</a></dt>
+<dd><p>Получает действительную базовую ссылку на расписание с текущим хэшем.</p>
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="#">TRPP_Queue</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="#">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Two Antons.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 8.2.3</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
