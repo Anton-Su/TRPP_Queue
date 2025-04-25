@@ -1,7 +1,9 @@
 .env
 # Игнорировать папку .idea
 .idea/
-
+.docs/
+.TRPP_Queue.egg-info/
+.dist/
 # Игнорировать файлы модулей PyCharm
 *.iml
 *.ipr

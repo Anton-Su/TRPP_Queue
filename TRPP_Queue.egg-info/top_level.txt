@@ -1,4 +1,0 @@
-deletion
-main
-schedule
-validation
