@@ -30,6 +30,7 @@ async def form_correctslinks(base_url, stop=10000):
     3. Если ответ успешен (код 200), извлекает информацию о расписании в формате iCal и преобразует его.
     4. Если расписание содержит более 5 событий, считается, что у этой группы есть занятия, название группы и URL сохранются в таблицу `Session`.
     """
+
     conn = sqlite3.connect(getenv("DATABASE_NAME"))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM Session;")
@@ -38,6 +39,7 @@ async def form_correctslinks(base_url, stop=10000):
     cursor.execute("DELETE FROM All_groups;")
     cursor.execute("DELETE FROM Timetable;")
     conn.commit()
+
     for i in range(stop):
         url = f"{base_url}{i:03d}"  # Формируем URL
         try:
