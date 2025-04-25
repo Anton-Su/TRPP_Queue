@@ -104,7 +104,7 @@ async def generate_schedule(start_date, end_date, description, teacher, location
                  start_date.hour, start_date.minute, end_date.month, end_date.day, end_date.hour, end_date.minute, location))
                 conn.commit()
             break
-        # Добавляем 2 недели
+        # Добавляем 2 недели (интервал)
         start_date += timedelta(weeks=2)
         end_date += timedelta(weeks=2)
     conn.commit()
