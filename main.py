@@ -1,4 +1,5 @@
 from datetime import datetime
+from math import lgamma
 from os import getenv
 
 import aiogram.enums.chat_member_status
@@ -62,26 +63,29 @@ async def dindin(month: int, date: int,hour: int, minute: int):
     _class = cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?',
                             (month, date, hour, minute)).fetchall()
     for i in _class:
-        chat_id_thread = cursor.execute(f'SELECT group_id, thread_id FROM All_groups Where GroupName = "{i.GroupName}"').fetchall()
+        chat_id_thread = cursor.execute(f'SELECT group_id, thread_id FROM All_groups Where GroupName = "{i[1]}"').fetchall()
         keyboard =  InlineKeyboardMarkup(
             inline_keyboard=[
                 #TODO: сделать обработчики комманд
-                [InlineKeyboardButton(text="Записаться", url=f"https://t.me/{await bot.get_me().username}?start={i.Id}"),
-                  InlineKeyboardButton(text="Подтвердить ответ", callback_data=f"pass_command_inline"),]
+                [InlineKeyboardButton(text="Записаться в очередь", callback_data=f"queury_handler_reg"),
+                  InlineKeyboardButton(text="Подтвердить ответ/отменить запись", callback_data=f"queury_handler_pass"),]
             ]
         )
         #TODO: добавить список юзеров
 
-        await bot.send_message(chat_id=chat_id_thread.group_id, message_thread_id=chat_id_thread.thread_id,
-                               text=f"""Началось занятие: {i.Task}!
+        await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1],
+                               text=f"""Началось занятие: {i[2]}!
 Действующая очередь:"""
                                , reply_markup=keyboard)
 
-
-
-
     conn.close()
     pass
+
+# "subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}"
+
+@dp.callback_query(lambda call: call.data == "queury_handler_reg")
+async def queury_handler(call: CallbackQuery):
+    user_id = call.from_user.id
 
 
 
@@ -151,6 +155,8 @@ async def generatescheduler_to_currect_day(): # установка будиль�
                                           "hour": start_hour, "minute": start_minute},
                                   run_date=end_date, id=f"{end_hour}_{end_minute}")
 
+
+ #TODO
 @dp.message(Command("pass"))
 async def pass_command(message: Message):
     pass
@@ -365,6 +371,9 @@ async def handle_subject(callback: CallbackQuery):
     - Если записан, удаляет его из очереди и пересчитывает порядок (Poryadok).
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
+
+    # "subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}"
+
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
