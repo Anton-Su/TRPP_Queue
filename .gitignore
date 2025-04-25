@@ -4,6 +4,7 @@
 .docs/
 .TRPP_Queue.egg-info/
 .dist/
+.__pycache__/
 # Игнорировать файлы модулей PyCharm
 *.iml
 *.ipr
