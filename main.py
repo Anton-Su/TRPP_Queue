@@ -11,7 +11,6 @@ from validation import form_correctslinks, get_link_with_current_hash
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from schedule import refresh_schedule, get_schedule
-from deletion import delete_old_sessions
 import sqlite3
 import logging
 import asyncio
@@ -40,6 +39,8 @@ kbpass = ReplyKeyboardMarkup( # Создаем кнопку, на которую
     ], resize_keyboard=True, one_time_keyboard=True)
 
 MARKDOWN_V2_SPECIAL_CHARS = r"_*[\]()~`>#+-=|{}.!"
+
+
 def escape_md(text: str) -> str:
     """
     Экранирует специальные символы MarkdownV2 в строке text, потому что кто-то решил удалить фф-ю из aiogram
@@ -50,6 +51,7 @@ def escape_md(text: str) -> str:
         text
     )
     return escaped_text
+
 
 class RegisterState(StatesGroup):
     """
@@ -114,7 +116,8 @@ async def triggerlistupdate(chat_id: int, message_id: int):
         parse_mode="MarkdownV2",
         text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}',
     )
-    await bot.send_message(__people[0][3],"Привет, твоя очередь")
+    if __people:
+        await bot.send_message(__people[0][3],"Привет, твоя очередь")
     conn.close()
     pass
 
@@ -180,6 +183,28 @@ async def query_handler_reg(call: CallbackQuery):
     return await call.answer("Done!", show_alert=True)
 
 
+async def delete_old_sessions(): # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+    """
+    Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
+    Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
+    Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
+    - Вызывает функцию dandalan
+    """
+    conn = sqlite3.connect(getenv("DATABASE_NAME"))
+    cursor = conn.cursor()
+    current_date = datetime.now()
+    hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
+    result = cursor.execute("SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) "
+                            "OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ?"
+                            " AND Start_Hour = ? AND Start_Minute < ?)",
+                            (month, month, day, month, day, hour, month, day, hour, minute)).fetchall()
+
+    if result:
+        for end_month, end_day, end_hour, end_minute in result:
+            await dandalan(end_month, end_day, end_hour, end_minute)
+    conn.commit()
+
+
 @dp.callback_query(F.data.startswith("query_handler_pass_"))
 async def query_handler_pass(call: CallbackQuery):
     """
@@ -224,7 +249,7 @@ async def handle_pass(message: Message):
 async def dandalan(month: int, date: int, hour: int, minute: int):
     """
     Функция для обработки окончания занятия.
-    Вызывается по расписанию через 90 (+10) минут после начала занятия.
+    Вызывается в конце занятия.
     Удаляет все упоминания о занятии.
     """
     conn = sqlite3.connect(DATABASE_NAME)
@@ -297,31 +322,38 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     - Проверяет, существуют ли уже задачи с таким временем.
     - Если задачи нет, создаёт две задачи:
     1. `dindin` запускается в указанное время.
-    2. `dandalan` запускается через 90 (+10) минут после первой.
+    2. `dandalan` запускается обычно через 90 (+10) минут после первой.
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
     current_date = datetime.now()
-    hour_minute = cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute, End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
+    start_hour_minute = cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
                                  (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
-    if hour_minute:
-        for start_hour, start_minute, end_hour, end_minute in hour_minute:
-            existing_job = scheduler.get_job(f"{start_hour}_{start_minute}")
-            if not existing_job: # если id такого не встречалось
-                start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
-                end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
-                scheduler.add_job(dindin, 'date',
-                                  kwargs={"month": start_date.month ,"date": start_date.day,
-                                          "hour": start_hour, "minute": start_minute},
-                                  run_date=start_date, id=f"{start_hour}_{start_minute}")
-                scheduler.add_job(dandalan, 'date',
-                                  kwargs={"month": end_date.month, "date": end_date.day,
-                                          "hour": end_hour, "minute": end_minute},
-                                  run_date=end_date, id=f"{end_hour}_{end_minute}")
+    if start_hour_minute:
+        for start_hour, start_minute in start_hour_minute:
+            start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
+            scheduler.add_job(dindin, 'date',
+                                kwargs={"month": start_date.month ,"date": start_date.day,
+                                        "hour": start_hour, "minute": start_minute},
+                                run_date=start_date)
+    end_hour_minute = cursor.execute("SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
+                                     (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
+    conn.close()
+    if end_hour_minute:
+        for end_hour, end_minute in end_hour_minute:
+            end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
+            scheduler.add_job(dandalan, 'date',
+                              kwargs={"month": end_date.month, "date": end_date.day,
+                                      "hour": end_hour, "minute": end_minute},
+                              run_date=end_date)
+
 
 
 @dp.my_chat_member()
 async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
+    if event.chat.type == "private":
+        # Если это личка — ничего не делаем
+        return
     bot_id = (await bot.me()).id
     if event.new_chat_member.user.id != bot_id: # Проверка, что это изменение статуса самого бота
         return None
