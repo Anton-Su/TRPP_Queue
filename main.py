@@ -117,7 +117,7 @@ async def triggerlistupdate(chat_id: int, message_id: int):
         text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}',
     )
     if __people:
-        await bot.send_message(__people[0][3],"Привет, твоя очередь")
+        await bot.send_message(__people[0][3],"Привет, твоя очередь", reply_markup=kbpass)
     conn.close()
     pass
 
@@ -273,7 +273,7 @@ async def handle_pass(message: Message):
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
         conn.commit()
         conn.close()
-        return await message.answer("Вы успешно ответили(наверное)!")
+        return await message.answer("Сдал!")
     conn.commit()
     conn.close()
     return await message.answer("Мы не нашли вас в очереди!")
@@ -294,7 +294,7 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
     ).fetchall()
 
     for row in _class:
-        print(row[1])
+        # print(row[1])
         cursor.execute(
             "DELETE FROM Ochered WHERE Numseance = ?",
             (row[1],)
