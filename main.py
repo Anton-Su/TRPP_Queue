@@ -72,7 +72,6 @@ async def triggerlistupdate(chat_id: int, message_id: int):
     """
     Фф-я, созданная для обработки очереди. Вызывается
     После каждого нажатия кнопки или иного события, затрагивающего очередь.
-    Возможно, не будет работать с функционалом отмены записи бота.
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -149,6 +148,7 @@ async def dindin(month: int, date: int,hour: int, minute: int):
         conn.close()
         await triggerlistupdate(chat_id_thread[0], msg.message_id)
     pass
+
 
 @dp.callback_query(F.data.startswith("query_handler_reg_"))
 async def query_handler_reg(call: CallbackQuery):
@@ -241,17 +241,15 @@ async def query_handler_pass(call: CallbackQuery):
 @dp.message(lambda message: message.text == "Сдал") # Обработка псевдонима
 @dp.message(Command("pass"))
 async def handle_pass(message: Message):
-    # клава kbpass подготовлена
+    """Обрабатывает процесс сдачи пользователя в личных сообщениях (не через группу)"""
     user_id = message.from_user.id
     current_time = datetime.now()
     current_month = current_time.month
     current_day = current_time.day
     current_hour = current_time.hour
     current_minute = current_time.minute
-
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-
     GroupName = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
     class_id = cursor.execute("""
                               SELECT Id
@@ -271,9 +269,12 @@ async def handle_pass(message: Message):
                                     current_month, current_day, current_hour, current_minute, GroupName)).fetchone()[0]
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
+        await message.answer("Сдал!")
+        chat_id_thread = cursor.execute(f'SELECT group_id FROM All_groups Where GroupName = ?', (GroupName,)).fetchall()[0]
+        message_id = cursor.execute(f'''SELECT message_id FROM Timetable ORDER BY Start_Month, Start_Day, Start_Hour, Start_Minute LIMIT 1''').fetchall()[0]
         conn.commit()
         conn.close()
-        return await message.answer("Сдал!")
+        return await triggerlistupdate(chat_id_thread[0], message_id[0])
     conn.commit()
     conn.close()
     return await message.answer("Мы не нашли вас в очереди!")
@@ -384,6 +385,9 @@ async def generatescheduler_to_currect_day(): # установка будиль�
 
 @dp.my_chat_member()
 async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
+    """Автоматически привязывают юзера к группе
+    - Вызывается при добавлении бота в группе
+    """
     if event.chat.type == "private":
         # Если это личка — ничего не делаем
         return
@@ -425,6 +429,9 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
 
 @dp.message(Command("link"))
 async def link(message: Message):
+    """Привязывает бота к определённому топику
+    - Если группа обычная (топиков нет), возвращает NULL
+     """
     if message.chat.type == "private": # Игнорируем команду в личке
         return
     user_id = message.from_user.id
@@ -448,6 +455,9 @@ async def link(message: Message):
 
 @dp.message(Command("unlink"))
 async def unlink(message: Message):
+    """Удаляет бота из группы (команда админа)
+    - Если группа обычная (топиков нет), возвращает NULL
+    """
     if message.chat.type == "private": # Игнорируем команду в личке
         return
     member = await bot.get_chat_member(message.chat.id, message.from_user.id)
@@ -576,9 +586,7 @@ async def command_start_handler(message: Message) -> None:
 @dp.message(Command("help")) # Функция для обработки команды /help
 @dp.message(lambda message: message.text == "Помощь")  # Обрабатываем и "Помощь"
 async def send_help(message: Message):
-    """
-    Обрабатывает команду /help, отправляет шуточное мотивационное сообщение.
-    """
+    """Обрабатывает команду /help, отправляет шуточное мотивационное сообщение."""
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
@@ -586,6 +594,7 @@ async def send_help(message: Message):
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
 async def back_to_calendar(callback: CallbackQuery):
+    """Обрабатывает кнопку назад в inline клавиатуре."""
     await show_calendar(user_id=callback.from_user.id, callback=callback)
 
 
@@ -749,9 +758,7 @@ async def process_group(message: types.Message, state: FSMContext):
 
 @dp.message(RegisterState.name) # Обработка ввода имени
 async def process_name(message: types.Message, state: FSMContext):
-    """
-    Обрабатывает ввод имени пользователя и переходит к вводу фамилии.
-    """
+    """Обрабатывает ввод имени пользователя и переходит к вводу фамилии."""
     await state.update_data(name=message.text.capitalize())
     await message.answer("Введите вашу фамилию:")
     await state.set_state(RegisterState.surname)
@@ -759,9 +766,7 @@ async def process_name(message: types.Message, state: FSMContext):
 
 @dp.message(RegisterState.surname) # Обработка ввода фамилии
 async def process_surname(message: types.Message, state: FSMContext):
-    """
-    Обрабатывает ввод фамилии пользователя и переходит к вводу отчества.
-    """
+    """Обрабатывает ввод фамилии пользователя и переходит к вводу отчества."""
     await state.update_data(surname=message.text.capitalize())
     await message.answer("Введите ваше отчество (если нет, напишите '-'): ")
     await state.set_state(RegisterState.middle_name)
