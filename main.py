@@ -79,7 +79,7 @@ async def triggerlistupdate(chat_id: int, message_id: int):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Записаться в очередь", callback_data=f"query_handler_reg_{_class[0]}"),
-             InlineKeyboardButton(text="Подтвердить ответ/отменить запись",
+             InlineKeyboardButton(text="Cдал",
                                   callback_data=f"query_handler_pass_{_class[0]}"), ]
         ]
     )
@@ -214,7 +214,7 @@ async def query_handler_pass(call: CallbackQuery):
     cursor = conn.cursor()
 
     if cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,)).fetchone() == None:
-        return call.answer("Вы зарегистрированны!", show_alert=True)
+        return call.answer("Вы зарегистрированы!", show_alert=True)
 
     _class_id = call.data.split("_")[-1]
     if cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?",
@@ -269,9 +269,9 @@ async def handle_pass(message: Message):
                                     current_month, current_day, current_hour, current_minute, GroupName)).fetchone()[0]
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
-        await message.answer("Сдал!")
+        await message.answer("Надеюсь, реально сдал!")
         chat_id_thread = cursor.execute(f'SELECT group_id FROM All_groups Where GroupName = ?', (GroupName,)).fetchall()[0]
-        message_id = cursor.execute(f'''SELECT message_id FROM Timetable ORDER BY Start_Month, Start_Day, Start_Hour, Start_Minute LIMIT 1''').fetchall()[0]
+        message_id = cursor.execute(f'SELECT message_id FROM Timetable Where Id = ?', (class_id,)).fetchall()[0]
         conn.commit()
         conn.close()
         return await triggerlistupdate(chat_id_thread[0], message_id[0])
@@ -567,7 +567,10 @@ async def command_start_handler(message: Message) -> None:
     count = cursor.execute("SELECT COUNT(*) FROM Users WHERE GroupName = ?", (group,)).fetchone()[0]
     cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
     cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
-    if count == 1: # Если он был последним участником группы, удаляем все данные группы
+    if count == 1: # Если он был последним участником группы, удаляем все данные группы и выкидываем бота
+        group_id = cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group,)).fetchone()[0]
+        if group_id:
+            await bot.leave_chat(group_id)
         cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
         cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
         await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» распущена!")
