@@ -214,7 +214,7 @@ async def query_handler_pass(call: CallbackQuery):
     cursor = conn.cursor()
 
     if cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,)).fetchone() == None:
-        return call.answer("Вы зарегистрированные!", show_alert=True)
+        return call.answer("Вы зарегистрированны!", show_alert=True)
 
     _class_id = call.data.split("_")[-1]
     if cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?",
@@ -242,8 +242,41 @@ async def query_handler_pass(call: CallbackQuery):
 @dp.message(Command("pass"))
 async def handle_pass(message: Message):
     # клава kbpass подготовлена
+    user_id = message.from_user.id
+    current_time = datetime.now()
+    current_month = current_time.month
+    current_day = current_time.day
+    current_hour = current_time.hour
+    current_minute = current_time.minute
 
-    pass
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    GroupName = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
+    class_id = cursor.execute("""
+                              SELECT Id
+                              FROM Timetable
+                              WHERE (Start_Month < ? OR (Start_Month = ? AND Start_Day < ?)
+                                  OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?)
+                                  OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?))
+                                AND (End_Month > ? OR (End_Month = ? AND End_Day > ?)
+                                  OR (End_Month = ? AND End_Day = ? AND End_Hour > ?)
+                                  OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute >= ?))
+                                AND GroupName = ?
+                              """, (current_month, current_month, current_day,
+                                    current_month, current_day, current_hour,
+                                    current_month, current_day, current_hour, current_minute,
+                                    current_month, current_month, current_day,
+                                    current_month, current_day, current_hour,
+                                    current_month, current_day, current_hour, current_minute, GroupName)).fetchone()[0]
+    if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id)).fetchone():
+        cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
+        conn.commit()
+        conn.close()
+        return await message.answer("Вы успешно ответили(наверное)!")
+    conn.commit()
+    conn.close()
+    return await message.answer("Мы не нашли вас в очереди!")
 
 
 async def dandalan(month: int, date: int, hour: int, minute: int):
