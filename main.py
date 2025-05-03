@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=TOKEN)
 kbregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только зарегистрированный пользователь
     keyboard=[
-        [KeyboardButton(text="Помощь"), KeyboardButton(text="Выйти")],
+        [KeyboardButton(text="Создать"), KeyboardButton(text="Выйти")],
         [KeyboardButton(text="Забронировать"), KeyboardButton(text="Cтатистика")]
     ], resize_keyboard=True, one_time_keyboard=False)
 kbnotregister = ReplyKeyboardMarkup( # Создаем кнопку, которую видит только незарегистрированный пользователь
@@ -66,6 +66,22 @@ class RegisterState(StatesGroup):
     name = State()
     surname = State()
     middle_name = State()
+
+class AddState(StatesGroup):
+    """
+    Класс состояний для регистрации добавления пары в FSM (Finite State Machine).
+    Содержит следующие состояния:
+    - groupname: Номер группы
+    - start: Дата начала пары.
+    - end: Дата конца пары.
+    - title: Название пары
+    - location: Где находится пара
+    """
+    groupname = State()
+    start = State()
+    end = State()
+    title = State()
+    location = State()
 
 
 async def triggerlistupdate(chat_id: int, message_id: int):
@@ -235,6 +251,7 @@ async def query_handler_pass(call: CallbackQuery):
         pass
     await triggerlistupdate(call.message.chat.id, call.message.message_id)
     conn.close()
+    await bot.send_message(chat_id=call.from_user.id, text="Надеюсь, реально сдал", reply_markup=kbregister)
     return await call.answer("Done!", show_alert=True)
 
 
@@ -269,7 +286,7 @@ async def handle_pass(message: Message):
                                     current_month, current_day, current_hour, current_minute, GroupName)).fetchone()[0]
     if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id)).fetchone():
         cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
-        await message.answer("Надеюсь, реально сдал!")
+        await message.answer("Надеюсь, реально сдал!", reply_markup=kbregister)
         chat_id_thread = cursor.execute(f'SELECT group_id FROM All_groups Where GroupName = ?', (GroupName,)).fetchall()[0]
         message_id = cursor.execute(f'SELECT message_id FROM Timetable Where Id = ?', (class_id,)).fetchall()[0]
         conn.commit()
@@ -356,7 +373,7 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     - Проверяет, существуют ли уже задачи с таким временем.
     - Если задачи нет, создаёт две задачи:
     1. `dindin` запускается в указанное время.
-    2. `dandalan` запускается обычно через 90 (+10) минут после первой.
+    2. `dandalan` запускается обычно через 90 (+10) минут после первой (если данные получены из сайта mirea.ru).
     """
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -369,7 +386,7 @@ async def generatescheduler_to_currect_day(): # установка будиль�
             scheduler.add_job(dindin, 'date',
                                 kwargs={"month": start_date.month ,"date": start_date.day,
                                         "hour": start_hour, "minute": start_minute},
-                                run_date=start_date)
+                                run_date=start_date, id=f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}")
     end_hour_minute = cursor.execute("SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
                                      (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
     conn.close()
@@ -379,7 +396,7 @@ async def generatescheduler_to_currect_day(): # установка будиль�
             scheduler.add_job(dandalan, 'date',
                               kwargs={"month": end_date.month, "date": end_date.day,
                                       "hour": end_hour, "minute": end_minute},
-                              run_date=end_date)
+                              run_date=end_date, id=f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}")
 
 
 
@@ -507,20 +524,27 @@ async def command_start_handler(message: Message) -> None:
         ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
     """, (user_id,)).fetchall()
     conn.close()
+    count = False
     for index, (subject, teacherfio, start_month, start_date, start_hour, start_minute,
                 end_hour, end_minute, location, actual_position) in enumerate(result, start=1):
         # Форматирование даты и времени
         start_time = f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} " \
                      f"{str(start_hour).rjust(2, '0')}:{str(start_minute).rjust(2, '0')}"
         end_time = f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}"
-        results.append(
-            f"{index}. {actual_position} место в очереди, {start_time} - {end_time}*\n"
-            f"«{subject}», проходит в «{location}», ведёт {teacherfio}"
-        )
+        if teacherfio != 'Someone':
+            results.append(
+                f"{index}. {actual_position} место в очереди, {start_time} - {end_time}*\n"
+                f"«{subject}», проходит в «{location}», ведёт {teacherfio}")
+            count = True
+        else:
+            results.append(
+                f"{index}. {actual_position} место в очереди, {start_time} - {end_time}\n"
+                f"«{subject}», проходит в «{location}». ЭТА ПАРА БЫЛА СОЗДАНА ВРУЧНУЮ")
     if not result:
         await message.answer("На данный момент вы не записаны ни на одно занятие")
         return
-    results.append("\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва")
+    if count:
+        results.append("\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва")
     results.insert(0, f'Всего активных записей: {len(result)}')
     await message.answer("\n".join(results))
 
@@ -726,6 +750,110 @@ async def register(message: types.Message, state: FSMContext):
     conn.close()
 
 
+@dp.message(Command("add_pair"))
+@dp.message(lambda message: message.text == "Создать")
+async def new_register(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    groupname = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
+    conn.close()
+    if groupname:
+        await state.update_data(groupname=groupname[0])
+        await message.answer("Введите дату начала пары в формате: ДД.ММ ЧЧ:ММ (например, 02.09 12:30)")
+        await state.set_state(AddState.start)
+    else:
+        await message.answer("Вы не зарегистрированы. Сначала выполните регистрацию.")
+
+
+@dp.message(AddState.start)
+async def process_start(message: types.Message, state: FSMContext):
+    try:
+        user_input = message.text.strip()
+        parsed = datetime.strptime(user_input, "%d.%m %H:%M")
+        start_date = datetime(year=datetime.now().year, month=parsed.month, day=parsed.day, hour=parsed.hour, minute=parsed.minute)
+        if start_date < datetime.now():
+            await message.answer("Нельзя выбрать прошедшее время. Введите дату и время в будущем.")
+            return
+        await state.update_data(start=start_date)
+        await message.answer("Введите дату окончания пары в формате: ЧЧ:ММ (Например, 14:40)")
+        await state.set_state(AddState.end)
+    except ValueError:
+        await message.answer("Неверный формат даты. Попробуйте снова: ДД.ММ ЧЧ:ММ")
+
+
+@dp.message(AddState.end)
+async def process_end(message: types.Message, state: FSMContext):
+    try:
+        user_input = message.text.strip()
+        time_only = datetime.strptime(user_input, "%H:%M").time()
+        data = await state.get_data()
+        start_date = data["start"]
+        # Формируем полноценную дату окончания с той же датой, что и у начала пары
+        end_date = datetime(year=start_date.year, month=start_date.month, day=start_date.day, hour=time_only.hour, minute=time_only.minute)
+        if end_date <= start_date:
+            await message.answer("Дата окончания должна быть позже начала. Попробуйте снова.")
+            return
+        await state.update_data(end=end_date)
+        await message.answer("Введите название пары")
+        await state.set_state(AddState.title)
+    except ValueError:
+        await message.answer("Неверный формат времени. Попробуйте снова: ЧЧ:ММ")
+
+
+@dp.message(AddState.title)
+async def process_title(message: types.Message, state: FSMContext):
+    await state.update_data(title=message.text.capitalize())
+    await message.answer("Введите место проведения пары")
+    await state.set_state(AddState.location)
+
+
+@dp.message(AddState.location)
+async def process_location(message: types.Message, state: FSMContext):
+    await state.update_data(location=message.text.strip())
+    data = await state.get_data()
+    groupname, title = data['groupname'], data['title']
+    location, start_date, end_date = data['location'], data['start'], data['end']
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+    new_start_minutes = start_date.hour * 60 + start_date.minute # Переводим время начала и конца новой пары в минуты с начала дня
+    new_end_minutes = end_date.hour * 60 + end_date.minute
+    # Выполняем запрос для поиска пересекающихся пар
+    conflict_pair = cursor.execute("""
+        SELECT 1 FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
+          AND End_Month = ? AND End_Day = ? AND ((Start_Hour * 60 + Start_Minute) < ? AND (End_Hour * 60 + End_Minute) > ?)
+    """, (groupname, start_date.month, start_date.day, end_date.month, end_date.day, new_end_minutes, new_start_minutes
+    )).fetchone()
+    if conflict_pair:
+        await message.answer(f"Не забивай на свои же пары, студент {groupname}!")
+        await state.clear()
+        return
+    cursor.execute("""
+            INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+        groupname, "Someone", title,
+        start_date.month, start_date.day, start_date.hour, start_date.minute,
+        end_date.month, end_date.day, end_date.hour, end_date.minute,
+        location
+    ))
+    conn.commit()
+    conn.close()
+    start_tag = f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}"
+    end_tag = f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}"
+    # Проверка: есть ли уже такие слоты в планировщике
+    def add_job_if_not_exists(job_tag, job_func, run_date):
+        if not any(job.id == job_tag for job in scheduler.get_jobs()):
+            scheduler.add_job(job_func, 'date', run_date=run_date,
+                              kwargs={"month": run_date.month, "date": run_date.day,
+                                      "hour": run_date.hour, "minute": run_date.minute}, id=job_tag)
+    add_job_if_not_exists(start_tag, dindin, start_date)
+    add_job_if_not_exists(end_tag, dandalan, end_date)
+    await message.answer("Пара успешно добавлена!", reply_markup=kbregister)
+    await state.clear()
+
+
+
 async def bot_kickes():
     """Выгоняет всех ботов из текущих групп (чистка)"""
     conn = sqlite3.connect(DATABASE_NAME)
@@ -819,6 +947,7 @@ async def main_async() -> None: # Run the bot
     - Кик бота из всех групп за десять минут дважды до удаления всех баз
     """
     await bot.set_my_commands([
+        BotCommand(command="/add_pair", description="Добавить уникальное занятие"),
         BotCommand(command="/link", description="Привязать бота к топику"),
         BotCommand(command="/unlink", description="Отвязать бота от чата"),
         BotCommand(command="/pass", description="Подтвердить посещение"),
