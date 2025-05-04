@@ -8,11 +8,12 @@ from aiogram.filters import Command
 from aiogram.types import (Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup,
                            CallbackQuery, BotCommand)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from validation import form_correctslinks, get_link_with_current_hash
+from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from schedule import refresh_schedule, get_schedule
-import sqlite3
+from createdb import create
+import aiosqlite
 import logging
 import asyncio
 
@@ -68,6 +69,7 @@ class RegisterState(StatesGroup):
     surname = State()
     middle_name = State()
 
+
 class AddState(StatesGroup):
     """
     Класс состояний для регистрации добавления пары в FSM (Finite State Machine).
@@ -90,81 +92,65 @@ async def triggerlistupdate(chat_id: int, message_id: int):
     Фф-я, созданная для обработки очереди. Вызывается
     После каждого нажатия кнопки или иного события, затрагивающего очередь.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    _class = cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE message_id =?', (message_id,)).fetchone()
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Записаться в очередь", callback_data=f"query_handler_reg_{_class[0]}"),
-             InlineKeyboardButton(text="Cдал",
-                                  callback_data=f"query_handler_pass_{_class[0]}"), ]
-        ]
-    )
-
-    _people = cursor.execute(
-        'SELECT NAME, Surname, Middle_name, Id FROM Users WHERE GroupName = ?',
-        (_class[1],)
-    ).fetchall()
-
-    _schedule = cursor.execute(
-        'SELECT Poryadok, Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok',
-        (_class[0],)
-    ).fetchall()
-
-    people_dict = {person[3]: person for person in _people}
-
-    __people = []
-    for _, person_id in _schedule:
-        if person_id in people_dict:
-            __people.append(people_dict[person_id])
-
-    queue_lines = []
-
-    for i in __people:
-        nameAndId = f'[{i[0]} {i[1]} {i[2]}](tg://user?id={i[3]})'
-        queue_lines.append(nameAndId)
-
-    queue_text = '\n'.join(queue_lines)
-    await bot.edit_message_text(
-        chat_id=chat_id,
-        message_id=message_id,
-        reply_markup=keyboard,
-        parse_mode="MarkdownV2",
-        text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}',
-    )
-    if __people:
-        await bot.send_message(__people[0][3],"Привет, твоя очередь", reply_markup=kbpass)
-    conn.close()
-    pass
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE message_id =?', (message_id,))
+            _class = await cursor.fetchone()
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="Записаться в очередь", callback_data=f"query_handler_reg_{_class[0]}"),
+                     InlineKeyboardButton(text="Cдал", callback_data=f"query_handler_pass_{_class[0]}"), ]
+                ]
+            )
+            await cursor.execute("SELECT NAME, Surname, Middle_name, Id FROM Users WHERE GroupName = ?", (_class[1],))
+            _people = await cursor.fetchall()
+            await cursor.execute("SELECT Poryadok, Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok", (_class[0],))
+            _schedule = await cursor.fetchall()
+            people_dict = {person[3]: person for person in _people}
+            __people = []
+            for _, person_id in _schedule:
+                if person_id in people_dict:
+                    __people.append(people_dict[person_id])
+            queue_lines = []
+            for i in __people:
+                nameAndId = f'[{i[0]} {i[1]} {i[2]}](tg://user?id={i[3]})'
+                queue_lines.append(nameAndId)
+            queue_text = '\n'.join(queue_lines)
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=keyboard,
+                parse_mode="MarkdownV2",
+                text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}',
+            )
+            if __people:
+                await bot.send_message(__people[0][3], "Привет, твоя очередь", reply_markup=kbpass)
 
 
-async def dindin(month: int, date: int,hour: int, minute: int):
+async def dindin(month: int, date: int, hour: int, minute: int):
     """
     Фф-я для обработки начала занятия.
     - Вызывается по расписанию в указанное время. Устраивает спам-рассылку с очередью.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    _class = cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?',
-                            (month, date, hour, minute)).fetchall()
-    conn.commit()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT Id, GroupName, Task FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?",
+                (month, date, hour, minute))
+            _class = await cursor.fetchall()
+            await conn.commit()
     for i in _class:
-        conn = sqlite3.connect(DATABASE_NAME)
-        cursor = conn.cursor()
-        chat_id_thread = cursor.execute(f'SELECT group_id, thread_id FROM All_groups Where GroupName = ?', (i[1],)).fetchall()[0]
-        msg = await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1],
-                               text=f"Генерация очереди пары...")
-        try:
-            await bot.pin_chat_message(chat_id_thread[0], msg.message_id)
-        except:
-            pass
-        cursor.execute(f'UPDATE Timetable SET message_id = ? WHERE Id = ?',
-                       (msg.message_id, i[0],))
-        conn.commit()
-        conn.close()
+        async with aiosqlite.connect(DATABASE_NAME) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT group_id, thread_id FROM All_groups Where GroupName = ?", (i[1],))
+                chat_id_thread = (await cursor.fetchall())[0]
+                msg = await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1], text=f"Генерация очереди пары...")
+                try:
+                    await bot.pin_chat_message(chat_id_thread[0], msg.message_id)
+                except:
+                    pass
+                await cursor.execute("UPDATE Timetable SET message_id = ? WHERE Id = ?", (msg.message_id, i[0]))
+                await conn.commit()
         await triggerlistupdate(chat_id_thread[0], msg.message_id)
-    pass
 
 
 @dp.callback_query(F.data.startswith("query_handler_reg_"))
@@ -172,53 +158,55 @@ async def query_handler_reg(call: CallbackQuery):
     """
     ФФ-я для записи пользователя, используя инлайн клавиатуру.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-
-    if cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,)).fetchone() == None:
-        return call.answer("Вы зарегистрированные!", show_alert=True)
-
-    _class_id = call.data.split("_")[-1]
-    if cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?",
-                      (call.from_user.id, _class_id,)).fetchone():
-        return call.answer("Вы уже зарегистрированы!", show_alert=True)
-    _class_data = cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?"
-                                 , (_class_id,)).fetchall()[0]
-    call_data = types.CallbackQuery(
-        id=call.id,
-        from_user=call.from_user,
-        data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
-        message=call.message,
-        chat_instance=call.chat_instance
-    )
-    try:
-        await handle_subject(call_data)
-    except:
-        pass
-    await triggerlistupdate(call.message.chat.id, call.message.message_id)
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            # Проверка регистрации пользователя
+            await cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,))
+            if await cursor.fetchone() is None:
+                return await call.answer("Вы не зарегистрированы!", show_alert=True)
+            _class_id = call.data.split("_")[-1]
+            await cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, _class_id))
+            if await cursor.fetchone():
+                return await call.answer("Вы уже зарегистрированы!", show_alert=True)
+            # Получение данных о занятии
+            await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
+                                 "WHERE Id = ?", (_class_id,))
+            _class_data = (await cursor.fetchall())[0]
+            call_data = types.CallbackQuery(
+                id=call.id,
+                from_user=call.from_user,
+                data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
+                message=call.message,
+                chat_instance=call.chat_instance
+            )
+            try:
+                await handle_subject(call_data)
+            except Exception:
+                pass
+            await triggerlistupdate(call.message.chat.id, call.message.message_id)
     return await call.answer("Done!", show_alert=True)
 
 
-async def delete_old_sessions(): # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+async def delete_old_sessions():  # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
     """
     Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
     Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
     Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
     - Вызывает функцию dandalan
     """
-    conn = sqlite3.connect(getenv("DATABASE_NAME"))
-    cursor = conn.cursor()
-    current_date = datetime.now()
-    hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
-    result = cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE 
-            End_Month < ? OR (End_Month = ? AND End_Day < ?) OR (End_Month = ? AND End_Day = ? AND End_Hour < ?)
-            OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
-    """, (month, month, day, month, day, hour, month, day, hour, minute)).fetchall()
-    if result:
-        for end_month, end_day, end_hour, end_minute in result:
-            await dandalan(end_month, end_day, end_hour, end_minute)
-    conn.commit()
+    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+        async with conn.cursor() as cursor:
+            current_date = datetime.now()
+            hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
+            await cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE 
+                    End_Month < ? OR (End_Month = ? AND End_Day < ?) OR (End_Month = ? AND End_Day = ? AND End_Hour < ?)
+                    OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
+            """, (month, month, day, month, day, hour, month, day, hour, minute))
+            result = await cursor.fetchall()
+            if result:
+                for end_month, end_day, end_hour, end_minute in result:
+                    await dandalan(end_month, end_day, end_hour, end_minute)
+            await conn.commit()
 
 
 @dp.callback_query(F.data.startswith("query_handler_pass_"))
@@ -226,36 +214,36 @@ async def query_handler_pass(call: CallbackQuery):
     """
     Фф-я для отмены записи пользователя (по тем или иным причинам).
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-
-    if cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,)).fetchone() == None:
-        return call.answer("Вы зарегистрированы!", show_alert=True)
-
-    _class_id = call.data.split("_")[-1]
-    if cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?",
-                      (call.from_user.id, _class_id,)).fetchone() == None:
-        return call.answer("Вы не регистрировались на данную пару!", show_alert=True)
-    _class_data = cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?"
-        , (_class_id,)).fetchall()[0]
-    call_data = types.CallbackQuery(
-        id=call.id,
-        from_user=call.from_user,
-        data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
-        message=call.message,
-        chat_instance=call.chat_instance
-    )
-    try:
-        await handle_subject(call_data)
-    except:
-        pass
-    await triggerlistupdate(call.message.chat.id, call.message.message_id)
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            # Проверка регистрации пользователя
+            await cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,))
+            if await cursor.fetchone() is None:
+                return await call.answer("Вы не зарегистрированы!", show_alert=True)
+            _class_id = call.data.split("_")[-1]
+            await cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, _class_id))
+            if await cursor.fetchone() is None:
+                return await call.answer("Вы не регистрировались на данную пару!", show_alert=True)
+            # Получение данных о занятии
+            await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?", (_class_id,))
+            _class_data = (await cursor.fetchall())[0]
+            call_data = types.CallbackQuery(
+                id=call.id,
+                from_user=call.from_user,
+                data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
+                message=call.message,
+                chat_instance=call.chat_instance
+            )
+            try:
+                await handle_subject(call_data)
+            except Exception:
+                pass
+            await triggerlistupdate(call.message.chat.id, call.message.message_id)
     await bot.send_message(chat_id=call.from_user.id, text="Надеюсь, реально сдал", reply_markup=kbregister)
     return await call.answer("Done!", show_alert=True)
 
 
-@dp.message(lambda message: message.text == "Сдал") # Обработка псевдонима
+@dp.message(lambda message: message.text == "Сдал")  # Обработка псевдонима
 @dp.message(Command("pass"))
 async def handle_pass(message: Message):
     """Обрабатывает процесс сдачи пользователя в личных сообщениях (не через группу)"""
@@ -265,35 +253,36 @@ async def handle_pass(message: Message):
     current_day = current_time.day
     current_hour = current_time.hour
     current_minute = current_time.minute
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    GroupName = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    class_id = cursor.execute("""
-                              SELECT Id
-                              FROM Timetable
-                              WHERE (Start_Month < ? OR (Start_Month = ? AND Start_Day < ?)
-                                  OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?)
-                                  OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?))
-                                AND (End_Month > ? OR (End_Month = ? AND End_Day > ?)
-                                  OR (End_Month = ? AND End_Day = ? AND End_Hour > ?)
-                                  OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute >= ?))
-                                AND GroupName = ?
-                              """, (current_month, current_month, current_day,
-                                    current_month, current_day, current_hour,
-                                    current_month, current_day, current_hour, current_minute,
-                                    current_month, current_month, current_day,
-                                    current_month, current_day, current_hour,
-                                    current_month, current_day, current_hour, current_minute, GroupName)).fetchone()[0]
-    if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id)).fetchone():
-        cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
-        await message.answer("Надеюсь, реально сдал!", reply_markup=kbregister)
-        chat_id_thread = cursor.execute(f'SELECT group_id FROM All_groups Where GroupName = ?', (GroupName,)).fetchall()[0]
-        message_id = cursor.execute(f'SELECT message_id FROM Timetable Where Id = ?', (class_id,)).fetchall()[0]
-        conn.commit()
-        conn.close()
-        return await triggerlistupdate(chat_id_thread[0], message_id[0])
-    conn.commit()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+            GroupName = (await cursor.fetchone())[0]
+            await cursor.execute("""
+                SELECT Id
+                FROM Timetable
+                WHERE (Start_Month < ? OR (Start_Month = ? AND Start_Day < ?)
+                    OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?)
+                    OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?))
+                    AND (End_Month > ? OR (End_Month = ? AND End_Day > ?)
+                    OR (End_Month = ? AND End_Day = ? AND End_Hour > ?)
+                    OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute >= ?))
+                    AND GroupName = ?
+                """, (current_month, current_month, current_day, current_month, current_day, current_hour,
+                      current_month, current_day, current_hour, current_minute, current_month, current_month,
+                      current_day, current_month, current_day, current_hour, current_month, current_day,
+                      current_hour, current_minute, GroupName))
+            class_id = (await cursor.fetchone())[0]
+            await cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
+            if await cursor.fetchone():
+                await cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
+                await message.answer("Надеюсь, реально сдал!", reply_markup=kbregister)
+                await cursor.execute("SELECT group_id FROM All_groups Where GroupName = ?", (GroupName,))
+                chat_id_thread = (await cursor.fetchall())[0]
+                await cursor.execute("SELECT message_id FROM Timetable Where Id = ?", (class_id,))
+                message_id = (await cursor.fetchall())[0]
+                await conn.commit()
+                return await triggerlistupdate(chat_id_thread[0], message_id[0])
+            await conn.commit()
     return await message.answer("Мы не нашли вас в очереди!")
 
 
@@ -303,39 +292,25 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
     Вызывается в конце занятия.
     Удаляет все упоминания о занятии.
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-
-    _class = cursor.execute(
-        "SELECT GroupName, Id, message_id FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
-        (month, date, hour, minute)
-    ).fetchall()
-
-    for row in _class:
-        # print(row[1])
-        cursor.execute(
-            "DELETE FROM Ochered WHERE Numseance = ?",
-            (row[1],)
-        )
-    try:
-        for row in _class:
-            group_name, _, message_id = row
-            chat_id = cursor.execute(
-                "SELECT group_id FROM All_groups WHERE GroupName = ?",
-                (group_name,)
-            ).fetchone()
-            if chat_id:
-                await bot.delete_message(chat_id[0], message_id)
-    except:
-        pass
-    cursor.execute(
-        "DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
-        (month, date, hour, minute)
-    )
-
-    conn.commit()
-    conn.close()
-    pass
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName, Id, message_id FROM Timetable WHERE End_Month = ? AND End_Day = ?"
+                                 "AND End_Hour = ? AND End_Minute = ?", (month, date, hour, minute))
+            _class = await cursor.fetchall()
+            for row in _class:
+                await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (row[1],))
+            try:
+                for row in _class:
+                    group_name, _, message_id = row
+                    await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,))
+                    chat_id = await cursor.fetchone()
+                    if chat_id:
+                        await bot.delete_message(chat_id[0], message_id)
+            except:
+                pass
+            await cursor.execute("DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
+                                 (month, date, hour, minute))
+            await conn.commit()
 
 
 async def generate_calendar(raspisanie): # Функция для генерации клавиатуры-календаря
@@ -366,7 +341,7 @@ async def generate_calendar(raspisanie): # Функция для генерац�
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def generatescheduler_to_currect_day(): # установка будильников на текущий день
+async def generatescheduler_to_currect_day():  # установка будильников на текущий день
     """
     Устанавливает будильники (запланированные задачи) на текущий день, используя расписание из базы данных.
     - Подключается к базе данных и получает время запланированных событий.
@@ -375,28 +350,41 @@ async def generatescheduler_to_currect_day(): # установка будиль�
     1. `dindin` запускается в указанное время.
     2. `dandalan` запускается обычно через 90 (+10) минут после первой (если данные получены из сайта mirea.ru).
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    current_date = datetime.now()
-    start_hour_minute = cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
-                                 (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
-    if start_hour_minute:
-        for start_hour, start_minute in start_hour_minute:
-            start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
-            scheduler.add_job(dindin, 'date',
-                                kwargs={"month": start_date.month ,"date": start_date.day,
-                                        "hour": start_hour, "minute": start_minute},
-                                run_date=start_date, id=f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}")
-    end_hour_minute = cursor.execute("SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
-                                     (current_date.month, current_date.day)).fetchall()  # Получаем все строки в виде списка кортежей
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            current_date = datetime.now()
+            await cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute FROM Timetable "
+                                 "WHERE Start_Month = ? AND Start_Day = ?", (current_date.month, current_date.day))
+            start_hour_minute = await cursor.fetchall()
+            if start_hour_minute:
+                for start_hour, start_minute in start_hour_minute:
+                    start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
+                    scheduler.add_job(dindin, 'date',
+                        kwargs={
+                            "month": start_date.month,
+                            "date": start_date.day,
+                            "hour": start_hour,
+                            "minute": start_minute
+                        },
+                        run_date=start_date,
+                        id=f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}")
+            await cursor.execute(
+                "SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
+                (current_date.month, current_date.day))
+            end_hour_minute = await cursor.fetchall()
     if end_hour_minute:
         for end_hour, end_minute in end_hour_minute:
             end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
-            scheduler.add_job(dandalan, 'date',
-                              kwargs={"month": end_date.month, "date": end_date.day,
-                                      "hour": end_hour, "minute": end_minute},
-                              run_date=end_date, id=f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}")
+            scheduler.add_job(
+                dandalan, 'date',
+                kwargs={
+                    "month": end_date.month,
+                    "date": end_date.day,
+                    "hour": end_hour,
+                    "minute": end_minute
+                },
+                run_date=end_date,
+                id=f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}")
 
 
 @dp.my_chat_member()
@@ -405,41 +393,35 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
     - Вызывается при добавлении бота в группу
     """
     if event.chat.type == "private":
-        # Если это личка — ничего не делаем
         return
     bot_id = (await bot.me()).id
-    if event.new_chat_member.user.id != bot_id: # Проверка, что это изменение статуса самого бота
+    if event.new_chat_member.user.id != bot_id:
         return None
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    chat_id = event.chat.id
-    if event.new_chat_member.status in ("member", "administrator"):  # бот добавлен в группу
-        user_id = event.from_user.id
-        try:
-            user_group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем пользователя, который добавил бота
-            # Проверяем, был ли ранее привязан чат в БД
-            existing_chat_id = cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (user_group,)).fetchone()[0]
-            await bot.get_chat(existing_chat_id) # Проверка на реальное нахождение в этом старом чате
-            if existing_chat_id != chat_id:
-                await bot.send_message(chat_id, f"{user_group} уже привязан к другой группе.")
-                return await bot.leave_chat(chat_id)
-            return None
-        except TypeError:
-            # Пользователь не зареган в системе
-            await bot.send_message(chat_id, "Прикалываешься? Юзер не зарегистрирован в системе.")
-            return await bot.leave_chat(chat_id)
-        except Exception:
-            # Бот не состоит в группе или не имеет доступа (ЗАБАНИЛИ)
-            cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?",(chat_id, user_group,))
-            conn.commit()
-            conn.close()
-            return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
-    elif event.new_chat_member.status in ("kicked", "left"):  # Проверяем, что бот был так или иначе удалён
-        # Отвязываем группу, очищая связанные данные в базе
-        cursor.execute("UPDATE All_groups SET group_id = NULL, thread_id = NULL WHERE group_id = ?", (chat_id,))
-        conn.commit()
-        conn.close()
-        return None
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            chat_id = event.chat.id
+            user_id = event.from_user.id
+            if event.new_chat_member.status in ("member", "administrator"):
+                try:
+                    await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+                    user_group = (await cursor.fetchone())[0]
+                    await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (user_group,))
+                    existing_chat_id = (await cursor.fetchone())[0]
+                    await bot.get_chat(existing_chat_id)
+                    if existing_chat_id != chat_id:
+                        await bot.send_message(chat_id, f"{user_group} уже привязан к другой группе.")
+                        return await bot.leave_chat(chat_id)
+                    return None
+                except TypeError:
+                    await bot.send_message(chat_id, "Прикалываешься? Юзер не зарегистрирован в системе.")
+                    return await bot.leave_chat(chat_id)
+                except Exception:
+                    await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?", (chat_id, user_group))
+                    await conn.commit()
+                    return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
+            elif event.new_chat_member.status in ("kicked", "left"):
+                await cursor.execute("UPDATE All_groups SET group_id = NULL, thread_id = NULL WHERE group_id = ?", (chat_id,))
+                await conn.commit()
     return None
 
 
@@ -448,81 +430,77 @@ async def link(message: Message):
     """Привязывает бота к определённому топику
     - Если группа обычная (топиков нет), возвращает NULL
      """
-    if message.chat.type == "private": # Игнорируем команду в личке
+    if message.chat.type == "private":
         return
     user_id = message.from_user.id
     thread_id = message.message_thread_id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    try:
-        user_group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?",(user_id,)).fetchone()[0]
-        chat_id = cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (user_group,)).fetchone()[0]
-        await bot.get_chat(chat_id)
-        current_chat_id = message.chat.id
-        if current_chat_id == chat_id:
-            cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = ? WHERE GroupName = ?", (chat_id, thread_id, user_group,))
-            conn.commit()
-            conn.close()
-            return message.answer(f"Теперь бот привязан к этопу топику группы {user_group}.")
-    except TypeError:
-        return message.answer("Вы не зарегистрированы.")
-
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+                user_group = (await cursor.fetchone())[0]
+                await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (user_group,))
+                chat_id = (await cursor.fetchone())[0]
+                await bot.get_chat(chat_id)
+                if message.chat.id == chat_id:
+                    await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = ? WHERE GroupName = ?", (chat_id, thread_id, user_group))
+                    await conn.commit()
+                    return await message.answer(f"Теперь бот привязан к этому топику группы {user_group}.")
+            except TypeError:
+                return await message.answer("Вы не зарегистрированы.", reply_markup=kbnotregister)
 
 
 @dp.message(Command("unlink"))
 async def unlink(message: Message):
-    """Удаляет бота из группы (команда админа)
-    """
-    if message.chat.type == "private": # Игнорируем команду в личке
+    """Удаляет бота из группы (команда админа)"""
+    if message.chat.type == "private":
         return
     member = await bot.get_chat_member(message.chat.id, message.from_user.id)
-    if member.status in ("creator", "administrator"):
-        chat_id = message.chat.id
-        conn = sqlite3.connect(DATABASE_NAME)
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT Id from Users WHERE Id = ?",(message.from_user.id,))
-        except TypeError:
-            return message.answer("Вы не зарегистрированы.")
-        try:
-            group_name = cursor.execute("SELECT GroupName FROM All_groups WHERE group_id = ?",(chat_id,)).fetchone()[0]
-            cursor.execute("UPDATE All_groups SET group_id = Null, thread_id = Null WHERE group_id = ?", (chat_id,))
-        except TypeError:
-            return message.answer("А чат вообще был к чему-то привязан?")
-        conn.commit()
-        conn.close()
-        await bot.send_message(chat_id, f"Бот отвязан от {group_name}.")
-        # await bot.send_message(chat_id, f"{chat_id} отвязан от {group_name}.")
-        return await bot.leave_chat(chat_id)
-    return message.answer(f"Вы не админ!")
+    if member.status not in ("creator", "administrator"):
+        return await message.answer("Вы не админ!")
+    chat_id = message.chat.id
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await cursor.execute("SELECT Id FROM Users WHERE Id = ?", (message.from_user.id,))
+                if not await cursor.fetchone():
+                    return await message.answer("Вы не зарегистрированы.", reply_markup=kbnotregister)
+                await cursor.execute("SELECT GroupName FROM All_groups WHERE group_id = ?", (chat_id,))
+                group_name = (await cursor.fetchone())[0]
+                await cursor.execute(
+                    "UPDATE All_groups SET group_id = NULL, thread_id = NULL WHERE group_id = ?", (chat_id,))
+                await conn.commit()
+                await bot.send_message(chat_id, f"Бот отвязан от {group_name}.")
+                return await bot.leave_chat(chat_id)
+            except TypeError:
+                return await message.answer("А чат вообще был к чему-то привязан?")
 
 
-@dp.message(Command("stats")) # Команда посмотреть статистику
-@dp.message(lambda message: message.text == "Cтатистика") # Обрабатываем и "Статистика"
+@dp.message(Command("stats"))  # Команда посмотреть статистику
+@dp.message(lambda message: message.text == "Cтатистика")  # Обрабатываем и "Статистика"
 async def command_start_handler(message: Message) -> None:
     """Обрабатывает команду /stats, отправляя пользователю его график записей."""
     user_id = message.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+                await cursor.execute("""
+                    SELECT T.Task, T.TeacherFIO, T.Start_Month, 
+                        T.Start_Day, T.Start_Hour, T.Start_Minute, 
+                        T.End_Hour, T.End_Minute, T.Location,
+                        (
+                            SELECT COUNT(*) + 1
+                            FROM Ochered O2
+                            WHERE O2.Numseance = O.Numseance
+                            AND O2.Poryadok < O.Poryadok
+                        ) AS ActualPosition
+                    FROM Timetable T
+                    JOIN Ochered O ON T.Id = O.Numseance
+                    WHERE O.Id = ?
+                    ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
+                """, (user_id,))
+                result = await cursor.fetchall()
     results = []
     year = datetime.now().year
-    # Запрос с динамическим расчетом актуальной позиции
-    result = cursor.execute("""
-        SELECT T.Task,  T.TeacherFIO, T.Start_Month, 
-            T.Start_Day, T.Start_Hour, T.Start_Minute, 
-            T.End_Hour,  T.End_Minute, T.Location,
-            (
-                SELECT COUNT(*) + 1
-                FROM Ochered O2
-                WHERE O2.Numseance = O.Numseance
-                AND O2.Poryadok < O.Poryadok
-            ) AS ActualPosition
-        FROM Timetable T
-        JOIN Ochered O ON T.Id = O.Numseance
-        WHERE O.Id = ?
-        ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
-    """, (user_id,)).fetchall()
-    conn.close()
     count = False
     for index, (subject, teacherfio, start_month, start_date, start_hour, start_minute,
                 end_hour, end_minute, location, actual_position) in enumerate(result, start=1):
@@ -574,6 +552,7 @@ async def command_start_handler(message: Message) -> None:
 ⣿⣿⣿⣻⡴⣟⣽⣿⡿⣵⢿⢕⣾⣽⣿⣟⣯⣽⣿⣷⣯⣾⡿⢡⣶⣽⣛⣿⡿⢯⣾⢋⣿⣟⣛⣿⣟⣵⣿⢰⢸⣿⣸⣿⣿⡜⣿⡴⣬⡌⠳⠬⡻⢷⡪⣿⣿⣿⣷⡷⣝⣿⣽⣿⣿
 """
 
+
 @dp.message(Command("exit"))  # Команда выйти из системы
 @dp.message(lambda message: message.text == "Выйти")  # Обрабатываем и "Выйти"
 async def command_start_handler(message: Message) -> None:
@@ -584,28 +563,31 @@ async def command_start_handler(message: Message) -> None:
     - Если он был последним в группе, удаляет данные группы (`All_groups`, `Timetable`).
     """
     user_id = message.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0]
-    count = cursor.execute("SELECT COUNT(*) FROM Users WHERE GroupName = ?", (group,)).fetchone()[0]
-    cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
-    cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
-    if count == 1: # Если он был последним участником группы, удаляем все данные группы и выкидываем бота
-        group_id = cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group,)).fetchone()[0]
-        if group_id:
-            await bot.leave_chat(group_id)
-        cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
-        cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-        await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» распущена!")
-    conn.commit()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+            group = (await cursor.fetchone())[0]
+            await cursor.execute("SELECT COUNT(*) FROM Users WHERE GroupName = ?", (group,))
+            count = (await cursor.fetchone())[0]
+            await cursor.execute("DELETE FROM Ochered WHERE Id = ?", (user_id,))
+            await cursor.execute("DELETE FROM Users WHERE Id = ?", (user_id,))
+            if count == 1:
+                await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group,))
+                group_id = (await cursor.fetchone())[0]
+                if group_id:
+                    await bot.leave_chat(group_id)
+                await cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
+                await cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
+                await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» распущена!")
+            await conn.commit()
     await message.answer("😢😢😢Очень жаль с вами расставаться, Юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("start")) # Начальная команда
 async def command_start_handler(message: Message) -> None:
     """Обрабатывает команду /start, приветствует пользователя и предлагает зарегистрироваться."""
-    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, закрепляю, слежу, и всё такое. Просто зарегистрируйся, добавь бота в группу вашей группы и следуй командам, и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
+    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, закрепляю, слежу, и всё такое. Просто зарегистрируйся, добавь бота в группу вашей группы и следуй командам, "
+                         "и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
@@ -614,7 +596,8 @@ async def send_help(message: Message):
     """Обрабатывает команду /help, отправляет шуточное мотивационное сообщение."""
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
-    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
+    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
+                         "Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
 
 
 
@@ -624,32 +607,29 @@ async def back_to_calendar(callback: CallbackQuery):
     await show_calendar(user_id=callback.from_user.id, callback=callback)
 
 
-async def show_calendar(user_id: int, message: types.Message = None, callback: CallbackQuery = None): #Универсальная функция для показа календаря (из команды и callback-запроса
+async def show_calendar(user_id: int, message: types.Message = None, callback: CallbackQuery = None):  # Универсальная функция для показа календаря (из команды и callback-запроса
     """
     Универсальная функция для отображения календаря пользователю.
     - Извлекает расписание (уникальные даты) из базы данных.
     - Генерирует интерактивную клавиатуру-календарь.
     - Отправляет или редактирует сообщение с календарем в зависимости от типа вызова (команда или callback-запрос).
     """
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    group = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()
-    if not group:
-        if message:
-            return await message.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
-        return await callback.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
-    raspisanie = cursor.execute(
-        "SELECT DISTINCT Start_Month, Start_Day FROM Timetable WHERE GroupName = ? ORDER BY Start_Month , Start_Day ",
-        (group[0],)).fetchall()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+            group = await cursor.fetchone()
+            if not group:
+                if message:
+                    return await message.answer("Вы не зарегистрированы!", reply_markup=kbnotregister)
+                return await callback.answer("Вы не зарегистрированы!", show_alert=True)
+            await cursor.execute("SELECT DISTINCT Start_Month, Start_Day FROM Timetable "
+                                 "WHERE GroupName = ? ORDER BY Start_Month, Start_Day", (group[0],))
+            raspisanie = await cursor.fetchall()
     keyboard = await generate_calendar(raspisanie)
-    if message: # Определяем, как отправить сообщение
+    if message:
         await message.answer("Определитесь с датой:", reply_markup=keyboard)
-        return None
     elif callback:
         await callback.message.edit_text("Определитесь с датой:", reply_markup=keyboard)
-        return None
-    return None
 
 
 @dp.message(Command("record")) # команда записи/отмены записи
@@ -665,7 +645,7 @@ async def remove_keyboard(callback: CallbackQuery):
     await callback.message.delete()
 
 
-@dp.callback_query(F.data.startswith("date_")) # Обработчик выбора даты
+@dp.callback_query(F.data.startswith("date_"))  # Обработчик выбора даты
 async def show_schedule(callback: CallbackQuery):
     """
     Обрабатывает выбор даты пользователем и отображает расписание на этот день.
@@ -674,23 +654,25 @@ async def show_schedule(callback: CallbackQuery):
     - Генерирует кнопки с предметами, их временем и местом проведения.
     - Позволяет пользователю выбрать предмет или вернуться к календарю.
     """
-    selected_date = callback.data.split("_")[1]  # Дата в формате YYYY-MM-DD
+    selected_date = callback.data.split("_")[1]
     user_id = callback.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    groupname = cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,)).fetchone()[0] # Получаем группу пользователя
-    subjects = cursor.execute("""SELECT Task, Start_Month, Start_Day, Start_Hour, 
-    Start_Minute, Location FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?""",
-                              (groupname, selected_date.split("-")[1], selected_date.split("-")[2])).fetchall() # Получаем расписание на выбранную дату
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
+            groupname = (await cursor.fetchone())[0]
+            await cursor.execute("""
+                SELECT Task, Start_Month, Start_Day, Start_Hour, Start_Minute, Location 
+                FROM Timetable 
+                WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
+                """, (groupname, selected_date.split("-")[1], selected_date.split("-")[2]))
+            subjects = await cursor.fetchall()
     keyboard = []
     for subject in subjects:
         task, month, day, hour, minute, location = subject
-        # Формируем текст кнопки с названием предмета, временем и местом
         text = f"{location} {str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')} - {task}"
         button = InlineKeyboardButton(
-            text=text[0:60],  # Реальные данные предмета
-            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}"  # Передаем в callback_data параметры
+            text=text[0:60],
+            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}"
         )
         keyboard.append([button])
     keyboard.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"back_to_calendar_{selected_date}")])
@@ -709,28 +691,28 @@ async def handle_subject(callback: CallbackQuery):
     """
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    numseance = cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
-                               "AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",
-                               (groupname, month, day, hour, minute, location)).fetchone()[0]
-    result = cursor.execute("""SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?""", (numseance,)).fetchone()
-    if result[0] is not None:
-        new_poryadok = result[0] + 1 # Если записи найдены, result[0] будет наибольшим Poryadok
-    else:
-        new_poryadok = 1
-    if cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id)).fetchone():
-        cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
-        conn.commit()
-        conn.close()
-        return await callback.answer("Запись отменена!")
-    cursor.execute("""INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)""", (numseance, user_id, new_poryadok))
-    conn.commit()
-    await callback.answer(f"Успешно! Ваш номер в очереди: {cursor.execute('SELECT COUNT(*) FROM Ochered WHERE Numseance = ?', (numseance,)).fetchone()[0]}")
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
+                "AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",
+                (groupname, month, day, hour, minute, location))
+            numseance = (await cursor.fetchone())[0]
+            await cursor.execute("SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?", (numseance,))
+            result = await cursor.fetchone()
+            new_poryadok = (result[0] + 1) if result[0] is not None else 1
+            await cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
+            if await cursor.fetchone():
+                await cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
+                await conn.commit()
+                return await callback.answer("Запись отменена!")
+            await cursor.execute("INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)", (numseance, user_id, new_poryadok))
+            await conn.commit()
+            await cursor.execute("SELECT COUNT(*) FROM Ochered WHERE Numseance = ?", (numseance,))
+            queue_position = (await cursor.fetchone())[0]
+            await callback.answer(f"Успешно! Ваш номер в очереди: {queue_position}")
 
 
-@dp.message(Command("register")) # Обработчик команды /register
+@dp.message(Command("register"))  # Обработчик команды /register
 @dp.message(lambda message: message.text == "Регистрация")  # Обрабатываем и "Регистрация"
 async def register(message: types.Message, state: FSMContext):
     """
@@ -739,15 +721,15 @@ async def register(message: types.Message, state: FSMContext):
     - Если нет, запрашивает у пользователя название группы и переводит FSM в состояние RegisterState.group.
     """
     user_id = message.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    groupname = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
-    if not groupname:
-        await message.answer("Введите вашу группу:")
-        await state.set_state(RegisterState.group)
-    else:
-        await message.answer("Вы уже зарегистрированы!", reply_markup=kbregister)
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,))
+            groupname = await cursor.fetchone()
+            if not groupname:
+                await message.answer("Введите вашу группу:")
+                await state.set_state(RegisterState.group)
+            else:
+                await message.answer("Вы уже зарегистрированы!", reply_markup=kbregister)
 
 
 @dp.message(Command("add_pair"))
@@ -758,16 +740,16 @@ async def new_register(message: types.Message, state: FSMContext):
     - Если юзер зарегистрирован, пропускает дальше
     """
     user_id = message.from_user.id
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    groupname = cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,)).fetchone()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,))
+            groupname = await cursor.fetchone()
     if groupname:
         await state.update_data(groupname=groupname[0])
         await message.answer("Введите дату начала пары в формате: ДД.ММ ЧЧ:ММ (например, 02.09 12:30)")
         await state.set_state(AddState.start)
     else:
-        await message.answer("Вы не зарегистрированы. Сначала выполните регистрацию.")
+        await message.answer("Вы не зарегистрированы. Сначала выполните регистрацию.", reply_markup=kbnotregister)
 
 
 @dp.message(AddState.start)
@@ -834,31 +816,25 @@ async def process_location(message: types.Message, state: FSMContext):
     data = await state.get_data()
     groupname, title = data['groupname'], data['title']
     location, start_date, end_date = data['location'], data['start'], data['end']
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    new_start_minutes = start_date.hour * 60 + start_date.minute # Переводим время начала и конца новой пары в минуты с начала дня
-    new_end_minutes = end_date.hour * 60 + end_date.minute
-    # Выполняем запрос для поиска пересекающихся пар
-    conflict_pair = cursor.execute("""
-        SELECT 1 FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
-          AND End_Month = ? AND End_Day = ? AND ((Start_Hour * 60 + Start_Minute) < ? AND (End_Hour * 60 + End_Minute) > ?)
-    """, (groupname, start_date.month, start_date.day, end_date.month, end_date.day, new_end_minutes, new_start_minutes
-    )).fetchone()
-    if conflict_pair:
-        await message.answer(f"Не забивай на свои же пары, студент {groupname}!")
-        await state.clear()
-        return
-    cursor.execute("""
-            INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-        groupname, "Someone", title,
-        start_date.month, start_date.day, start_date.hour, start_date.minute,
-        end_date.month, end_date.day, end_date.hour, end_date.minute,
-        location
-    ))
-    conn.commit()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            new_start_minutes = start_date.hour * 60 + start_date.minute
+            new_end_minutes = end_date.hour * 60 + end_date.minute
+            await cursor.execute("""SELECT 1 FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
+                      AND End_Month = ? AND End_Day = ? AND ((Start_Hour * 60 + Start_Minute) < ? AND (End_Hour * 60 + End_Minute) > ?)""",
+                                 (groupname, start_date.month, start_date.day, end_date.month, end_date.day, new_end_minutes, new_start_minutes))
+            conflict_pair = await cursor.fetchone()
+            if conflict_pair:
+                await message.answer(f"Не забивай на свои же пары, студент {groupname}!")
+                await state.clear()
+                return
+            await cursor.execute("""INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Month, Start_Day, 
+            Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                 (groupname, "Someone", title, start_date.month, start_date.day,
+                                  start_date.hour, start_date.minute, end_date.month, end_date.day, end_date.hour,
+                                  end_date.minute, location))
+            await conn.commit()
     start_tag = f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}"
     end_tag = f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}"
     # Проверка: есть ли уже такие слоты в планировщике
@@ -873,7 +849,7 @@ async def process_location(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(RegisterState.group) # Обработка ввода группы
+@dp.message(RegisterState.group)  # Обработка ввода группы
 async def process_group(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод группы пользователя и проверяет ее наличие в базе данных.
@@ -883,10 +859,10 @@ async def process_group(message: types.Message, state: FSMContext):
     - Если группа не существует, отправляет ошибку и очищает состояние.
     """
     await state.update_data(group=message.text.upper())
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    group_number = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),)).fetchone()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),))
+            group_number = await cursor.fetchone()
     if not group_number:
         await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
         await state.clear()
@@ -911,7 +887,7 @@ async def process_surname(message: types.Message, state: FSMContext):
     await state.set_state(RegisterState.middle_name)
 
 
-@dp.message(RegisterState.middle_name) # Обработка ввода отчества и сохранение в БД
+@dp.message(RegisterState.middle_name)  # Обработка ввода отчества и сохранение в БД
 async def process_middle_name(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод отчества пользователя, сохраняет данные в базе и завершает регистрацию.
@@ -921,24 +897,25 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     """
     user_data = await state.get_data()
     middle_name = message.text.capitalize() if message.text != "-" else None
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
-                   (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name))
-    conn.commit()
-    if not cursor.execute("SELECT 1 FROM All_groups WHERE GroupName = ?", (user_data['group'],)).fetchone(): # подгрузить расписание группы
-        cursor.execute("""INSERT INTO All_groups (GroupName) VALUES (?)""", (user_data['group'],))
-        conn.commit()
-        cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
-        current_hash = await get_link_with_current_hash()
-        if not current_hash:
-            conn.close()
-            await message.answer("✅ Регистрация завершена, но сайт миреа точка ру не отвечает (maybe, you use Virtual Private Network?)", reply_markup=kbregister)
-            return
-        url = current_hash + cursor.fetchone()[0]
-        await get_schedule(url, user_data['group'])
-        await generatescheduler_to_currect_day()
-    conn.close()
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
+                (message.from_user.id, user_data['group'], user_data['name'], user_data['surname'], middle_name))
+            await conn.commit()
+            await cursor.execute("SELECT 1 FROM All_groups WHERE GroupName = ?", (user_data['group'],))
+            if not await cursor.fetchone():
+                await cursor.execute("""INSERT INTO All_groups (GroupName) VALUES (?)""", (user_data['group'],))
+                await conn.commit()
+                await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
+                url_data = await cursor.fetchone()
+                current_hash = await get_link_with_current_hash()
+                if not current_hash:
+                    await message.answer("✅ Регистрация завершена, вы - первый, но сайт миреа точка ру не отвечает, расписание не подгружено "
+                                         "(maybe, you use Virtual Private Network?)", reply_markup=kbregister)
+                    return
+                url = current_hash + str(url_data[0])
+                await get_schedule(url, user_data['group'])
+                await generatescheduler_to_currect_day()
     await message.answer("✅ Регистрация завершена!", reply_markup=kbregister)
     await state.clear()
 
@@ -951,6 +928,7 @@ async def main_async() -> None: # Run the bot
     - Добавляет задачи в планировщик для регулярного обновления расписания и выполнения других задач в заданное время.
     - Запускает основной цикл бота, который обрабатывает сообщения от пользователей.
     Моментальные задачи:
+    - `create`: создаёт таблицы в базе данных (и саму базу), если они не существуют.
     - `delete_old_sessions`: удаляет старые сессии.
     - `refresh_schedule`: обновляет расписание.
     - `generatescheduler_to_currect_day`: генерирует будильники на текущий день.
@@ -958,6 +936,7 @@ async def main_async() -> None: # Run the bot
     - Обновление расписания каждое воскресенье в 00:30.
     - Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
     - Генерация расписания пар на текущий день каждый день в 07:30.
+    Если база данных не создана, вызывается функция `form_correctslinksstep_two` с параметрами 7000 и `scheduler`.
     """
     await bot.set_my_commands([
         BotCommand(command="/add_pair", description="Добавить уникальное занятие"),
@@ -971,9 +950,11 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/exit", description="Выход из системы"),
         BotCommand(command="/record", description="Забронировать / отменить бронь"),
     ])
-    await form_correctslinks(7000, scheduler, bot)
+    bd = create()
     await delete_old_sessions()
     await refresh_schedule()
+    if bd:
+        await form_correctslinksstep_two(7000, scheduler)
     await generatescheduler_to_currect_day() # начальные три действия
     scheduler.add_job(refresh_schedule, trigger='cron', hour=0, minute=30)
     scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, kwargs= {"stop": 7000, "scheduler": scheduler, "bot": bot})
