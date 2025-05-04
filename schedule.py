@@ -5,6 +5,7 @@ from os import getenv
 from datetime import datetime, timedelta
 from validation import get_link_with_current_hash
 
+
 peremen_minutes = 10  # время перемены, которое нужно добавить к времени занятия
 
 
@@ -16,13 +17,16 @@ async def refresh_schedule(): # обновить расписание
     2. Для каждой группы извлекает URL, связанный с ней.
     3. Для каждой группы вызывает функцию `get_schedule`, чтобы обновить расписание.
     """
+    currect_hash = await get_link_with_current_hash()
+    if not currect_hash:
+        return
     conn = sqlite3.connect(getenv("DATABASE_NAME"))
     cursor = conn.cursor()
     groups = cursor.execute("SELECT GroupName FROM All_groups").fetchall()  # Получаем все строки в виде списка кортежей
     for group in groups:
         group_name = group[0]
         group_number = cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,)).fetchone()[0]
-        url = await get_link_with_current_hash() + group_number
+        url = currect_hash + group_number
         await get_schedule(url, group_name)
     conn.close()
 
