@@ -5,7 +5,8 @@ from aiogram.types import ChatMemberUpdated
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, BotCommand
+from aiogram.types import (Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup,
+                           CallbackQuery, BotCommand)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks, get_link_with_current_hash
 from aiogram.fsm.context import FSMContext
@@ -187,7 +188,7 @@ async def query_handler_reg(call: CallbackQuery):
         id=call.id,
         from_user=call.from_user,
         data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
-        message= call.message,
+        message=call.message,
         chat_instance=call.chat_instance
     )
     try:
@@ -210,11 +211,10 @@ async def delete_old_sessions(): # удалить просроченное (на
     cursor = conn.cursor()
     current_date = datetime.now()
     hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
-    result = cursor.execute("SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) "
-                            "OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ?"
-                            " AND Start_Hour = ? AND Start_Minute < ?)",
-                            (month, month, day, month, day, hour, month, day, hour, minute)).fetchall()
-
+    result = cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE 
+            End_Month < ? OR (End_Month = ? AND End_Day < ?) OR (End_Month = ? AND End_Day = ? AND End_Hour < ?)
+            OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
+    """, (month, month, day, month, day, hour, month, day, hour, minute)).fetchall()
     if result:
         for end_month, end_day, end_hour, end_minute in result:
             await dandalan(end_month, end_day, end_hour, end_minute)
@@ -397,7 +397,6 @@ async def generatescheduler_to_currect_day(): # установка будиль�
                               kwargs={"month": end_date.month, "date": end_date.day,
                                       "hour": end_hour, "minute": end_minute},
                               run_date=end_date, id=f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}")
-
 
 
 @dp.my_chat_member()
@@ -606,7 +605,7 @@ async def command_start_handler(message: Message) -> None:
 @dp.message(Command("start")) # Начальная команда
 async def command_start_handler(message: Message) -> None:
     """Обрабатывает команду /start, приветствует пользователя и предлагает зарегистрироваться."""
-    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, закрепляю, слежу, и всё такое. Просто зарегистрируйся и следуй командам, и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
+    await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, закрепляю, слежу, и всё такое. Просто зарегистрируйся, добавь бота в группу вашей группы и следуй командам, и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
@@ -616,6 +615,7 @@ async def send_help(message: Message):
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
+
 
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
@@ -753,6 +753,10 @@ async def register(message: types.Message, state: FSMContext):
 @dp.message(Command("add_pair"))
 @dp.message(lambda message: message.text == "Создать")
 async def new_register(message: types.Message, state: FSMContext):
+    """
+    Обрабатывает добавлением юзером своей, неофициальной пары.
+    - Если юзер зарегистрирован, пропускает дальше
+    """
     user_id = message.from_user.id
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
@@ -768,6 +772,10 @@ async def new_register(message: types.Message, state: FSMContext):
 
 @dp.message(AddState.start)
 async def process_start(message: types.Message, state: FSMContext):
+    """
+    Обрабатывает ввод начала добавленного занятия.
+    - Если оно верно введено и не раньше текущего времени, то будет переход на конец занятия
+    """
     try:
         user_input = message.text.strip()
         parsed = datetime.strptime(user_input, "%d.%m %H:%M")
@@ -784,6 +792,10 @@ async def process_start(message: types.Message, state: FSMContext):
 
 @dp.message(AddState.end)
 async def process_end(message: types.Message, state: FSMContext):
+    """
+    Обрабатывает ввод конца добавленного занятия.
+    - Если оно верно введено и не раньше начала, то будет переход на название занятия
+    """
     try:
         user_input = message.text.strip()
         time_only = datetime.strptime(user_input, "%H:%M").time()
@@ -803,6 +815,9 @@ async def process_end(message: types.Message, state: FSMContext):
 
 @dp.message(AddState.title)
 async def process_title(message: types.Message, state: FSMContext):
+    """
+    Обрабатывает ввод названия добавленного занятия.
+    """
     await state.update_data(title=message.text.capitalize())
     await message.answer("Введите место проведения пары")
     await state.set_state(AddState.location)
@@ -810,7 +825,12 @@ async def process_title(message: types.Message, state: FSMContext):
 
 @dp.message(AddState.location)
 async def process_location(message: types.Message, state: FSMContext):
-    await state.update_data(location=message.text.strip())
+    """
+    Обрабатывает ввод локации добавленного занятия (обрезает до 14 символов).
+    - Если в группе пользователя нет пересечений занятий, добавляет новое занятие в базу данных
+    - Добавляет временные слоты (если раньше слотов с таким id не было)
+    """
+    await state.update_data(location=message.text.strip()[:14])
     data = await state.get_data()
     groupname, title = data['groupname'], data['title']
     location, start_date, end_date = data['location'], data['start'], data['end']
@@ -852,17 +872,6 @@ async def process_location(message: types.Message, state: FSMContext):
     await message.answer("Пара успешно добавлена!", reply_markup=kbregister)
     await state.clear()
 
-
-
-async def bot_kickes():
-    """Выгоняет всех ботов из текущих групп (чистка)"""
-    conn = sqlite3.connect(DATABASE_NAME)
-    cursor = conn.cursor()
-    group_ids = [row[0] for row in cursor.execute("SELECT group_id FROM All_groups").fetchall()]
-    for group_id in group_ids:
-        if group_id:
-            await bot.leave_chat(group_id)
-    return
 
 @dp.message(RegisterState.group) # Обработка ввода группы
 async def process_group(message: types.Message, state: FSMContext):
@@ -921,7 +930,12 @@ async def process_middle_name(message: types.Message, state: FSMContext):
         cursor.execute("""INSERT INTO All_groups (GroupName) VALUES (?)""", (user_data['group'],))
         conn.commit()
         cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
-        url = await get_link_with_current_hash() + cursor.fetchone()[0]
+        current_hash = await get_link_with_current_hash()
+        if not current_hash:
+            conn.close()
+            await message.answer("✅ Регистрация завершена, но сайт миреа точка ру не отвечает (maybe, you use Virtual Private Network?)", reply_markup=kbregister)
+            return
+        url = current_hash + cursor.fetchone()[0]
         await get_schedule(url, user_data['group'])
         await generatescheduler_to_currect_day()
     conn.close()
@@ -944,7 +958,6 @@ async def main_async() -> None: # Run the bot
     - Обновление расписания каждое воскресенье в 00:30.
     - Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
     - Генерация расписания пар на текущий день каждый день в 07:30.
-    - Кик бота из всех групп за десять минут дважды до удаления всех баз
     """
     await bot.set_my_commands([
         BotCommand(command="/add_pair", description="Добавить уникальное занятие"),
@@ -958,15 +971,14 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/exit", description="Выход из системы"),
         BotCommand(command="/record", description="Забронировать / отменить бронь"),
     ])
+    await form_correctslinks(7000, scheduler, bot)
     await delete_old_sessions()
     await refresh_schedule()
     await generatescheduler_to_currect_day() # начальные три действия
     scheduler.add_job(refresh_schedule, trigger='cron', hour=0, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
+    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, kwargs= {"stop": 7000, "scheduler": scheduler, "bot": bot})
     scheduler.add_job(generatescheduler_to_currect_day, trigger='cron', hour=7, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, args=[await get_link_with_current_hash()])
-    scheduler.add_job(bot_kickes, 'cron', month=2, day=1, hour=0, minute=20)
-    scheduler.add_job(bot_kickes, 'cron', month=9, day=1, hour=0, minute=20)
+    scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, kwargs= {"stop": 7000, "scheduler": scheduler, "bot": bot})
     scheduler.start()
     await dp.start_polling(bot)
 
