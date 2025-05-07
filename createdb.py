@@ -12,7 +12,7 @@ def create():
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Session (
     GroupName TEXT (14) PRIMARY KEY UNIQUE NOT NULL,
-    Url TEXT (85) UNIQUE NOT NULL);
+    Url INTEGER (4) UNIQUE NOT NULL);
     ''')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS All_groups (
