@@ -121,8 +121,7 @@ async def triggerlistupdate(chat_id: int, message_id: int):
                 message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="MarkdownV2",
-                text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}',
-            )
+                text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{escape_md(queue_text)}')
             if __people:
                 await bot.send_message(__people[0][3], "Привет, твоя очередь", reply_markup=kbpass)
 
