@@ -32,6 +32,25 @@ async def refresh_schedule():  # обновить расписание
                 await get_schedule(url, group_name)
 
 
+async def sync(group_name):  # обновить расписание по запросу
+    """
+    Обновляет расписание для одной группы, используя URL, сохраненные в базе данных.
+    В качестве параметра выступает group_name
+    Функция выполняет следующие шаги:
+    1. Извлекает URL, связанный с группой.
+    2. вызывает функцию `get_schedule`, чтобы обновить расписание.
+    """
+    currect_hash = await get_link_with_current_hash()
+    if not currect_hash:
+        return
+    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,))
+            group_number = (await cursor.fetchone())[0]
+            url = currect_hash + str(group_number)
+            await get_schedule(url, group_name)
+
+
 async def get_schedule(url, groupname):
     """
     Получает расписание для конкретной группы, парсит iCal контент и сохраняет его в базе данных.

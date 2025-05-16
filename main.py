@@ -11,7 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from schedule import refresh_schedule, get_schedule
+from schedule import refresh_schedule, get_schedule, sync
 from createdb import create
 import aiosqlite
 import logging
@@ -98,7 +98,7 @@ async def triggerlistupdate(chat_id: int, message_id: int):
             _class = await cursor.fetchone()
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="Записаться в очередь", callback_data=f"query_handler_reg_{_class[0]}"),
+                    [InlineKeyboardButton(text="Записаться", callback_data=f"query_handler_reg_{_class[0]}"),
                      InlineKeyboardButton(text="Cдал", callback_data=f"query_handler_pass_{_class[0]}"), ]
                 ]
             )
@@ -117,7 +117,6 @@ async def triggerlistupdate(chat_id: int, message_id: int):
                 nameAndId = f'[{text}](tg://user?id={i[3]})'
                 queue_lines.append(nameAndId)
             queue_text = '\n'.join(queue_lines)
-            print(queue_text)
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
@@ -733,6 +732,22 @@ async def register(message: types.Message, state: FSMContext):
                 await message.answer("Вы уже зарегистрированы!", reply_markup=kbregister)
 
 
+@dp.message(Command("sync"))
+@dp.message(lambda message: message.text == "Обновить")
+async def new_register(message: types.Message) -> None:
+    """Обрабатывает команду /sync, обновляя расписание группы юзера по запросуя."""
+    user_id = message.from_user.id
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,))
+            groupname = await cursor.fetchone()
+    if groupname:
+        await sync(groupname[0])
+        await message.answer("Запрос выполнен!", reply_markup=kbregister)
+    else:
+        await message.answer("Вы не зарегистрированы. Сначала выполните регистрацию.", reply_markup=kbnotregister)
+
+
 @dp.message(Command("add_pair"))
 @dp.message(lambda message: message.text == "Создать")
 async def new_register(message: types.Message, state: FSMContext):
@@ -950,6 +965,7 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/stats", description="Статистика"),
         BotCommand(command="/exit", description="Выход из системы"),
         BotCommand(command="/record", description="Забронировать / отменить бронь"),
+        BotCommand(command="/sync", description="Синхронизировать расписание"),
     ])
     bd = create()
     await delete_old_sessions()
