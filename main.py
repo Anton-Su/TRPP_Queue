@@ -113,15 +113,17 @@ async def triggerlistupdate(chat_id: int, message_id: int):
                     __people.append(people_dict[person_id])
             queue_lines = []
             for i in __people:
-                nameAndId = f'[{i[0]} {i[1]} {i[2]}](tg://user?id={i[3]})'
+                text = escape_md(f"{i[0]} {i[1]} {i[2]}")
+                nameAndId = f'[{text}](tg://user?id={i[3]})'
                 queue_lines.append(nameAndId)
             queue_text = '\n'.join(queue_lines)
+            print(queue_text)
             await bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="MarkdownV2",
-                text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{escape_md(queue_text)}')
+                text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}')
             if __people:
                 await bot.send_message(__people[0][3], "Привет, твоя очередь", reply_markup=kbpass)
 
