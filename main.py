@@ -726,7 +726,7 @@ async def register(message: types.Message, state: FSMContext):
 @dp.message(Command("sync"))
 @dp.message(lambda message: message.text == "Обновить")
 async def new_register(message: types.Message) -> None:
-    """Обрабатывает команду /sync, обновляя расписание группы юзера по запросуя."""
+    """Обрабатывает команду /sync, обновляя расписание группы юзера по запросу."""
     user_id = message.from_user.id
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
