@@ -20,6 +20,7 @@ async def refresh_schedule():  # обновить расписание
     currect_hash = await get_link_with_current_hash()
     if not currect_hash:
         return
+    print(currect_hash)
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT GroupName FROM All_groups")

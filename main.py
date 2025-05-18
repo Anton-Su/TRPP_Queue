@@ -114,8 +114,8 @@ async def triggerlistupdate(chat_id: int, message_id: int):
             queue_lines = []
             for i in __people:
                 text = escape_md(f"{i[0]} {i[1]} {i[2]}")
-                nameAndId = f'[{text}](tg://user?id={i[3]})'
-                queue_lines.append(nameAndId)
+                nameandid = f'[{text}](tg://user?id={i[3]})'
+                queue_lines.append(nameandid)
             queue_text = '\n'.join(queue_lines)
             await bot.edit_message_text(
                 chat_id=chat_id,
@@ -187,6 +187,13 @@ async def query_handler_reg(call: CallbackQuery):
     return await call.answer("Done!", show_alert=True)
 
 
+def add_job_if_not_exists(job_tag, job_func, run_date):
+    if not any(job.id == job_tag for job in scheduler.get_jobs()):
+        scheduler.add_job(job_func, 'date', run_date=run_date,
+                          kwargs={"month": run_date.month, "date": run_date.day,
+                                  "hour": run_date.hour, "minute": run_date.minute}, id=job_tag)
+
+
 async def delete_old_sessions():  # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
     """
     Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
@@ -198,15 +205,17 @@ async def delete_old_sessions():  # удалить просроченное (н�
         async with conn.cursor() as cursor:
             current_date = datetime.now()
             hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
-            await cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable WHERE 
-                    End_Month < ? OR (End_Month = ? AND End_Day < ?) OR (End_Month = ? AND End_Day = ? AND End_Hour < ?)
-                    OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
-            """, (month, month, day, month, day, hour, month, day, hour, minute))
+            # Получаем пары, которые уже начались
+            await cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
+            WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?)""",
+                                 (month, month, day, month, day, hour, month, day, hour, minute))
             result = await cursor.fetchall()
-            if result:
-                for end_month, end_day, end_hour, end_minute in result:
+            for end_month, end_day, end_hour, end_minute in result:
+                end_datetime = datetime(current_date.year, end_month, end_day, end_hour, end_minute)
+                if current_date >= end_datetime:
                     await dandalan(end_month, end_day, end_hour, end_minute)
-            await conn.commit()
+                else:
+                    add_job_if_not_exists(f"end_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}", dandalan, end_datetime)
 
 
 @dp.callback_query(F.data.startswith("query_handler_pass_"))
@@ -356,41 +365,23 @@ async def generatescheduler_to_currect_day():  # установка будиль
             await cursor.execute("SELECT DISTINCT Start_Hour, Start_Minute FROM Timetable "
                                  "WHERE Start_Month = ? AND Start_Day = ?", (current_date.month, current_date.day))
             start_hour_minute = await cursor.fetchall()
-            if start_hour_minute:
-                for start_hour, start_minute in start_hour_minute:
-                    start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
-                    scheduler.add_job(dindin, 'date',
-                        kwargs={
-                            "month": start_date.month,
-                            "date": start_date.day,
-                            "hour": start_hour,
-                            "minute": start_minute
-                        },
-                        run_date=start_date,
-                        id=f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}")
             await cursor.execute(
                 "SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
                 (current_date.month, current_date.day))
             end_hour_minute = await cursor.fetchall()
-    if end_hour_minute:
-        for end_hour, end_minute in end_hour_minute:
-            end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
-            scheduler.add_job(
-                dandalan, 'date',
-                kwargs={
-                    "month": end_date.month,
-                    "date": end_date.day,
-                    "hour": end_hour,
-                    "minute": end_minute
-                },
-                run_date=end_date,
-                id=f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}")
+    for start_hour, start_minute in start_hour_minute:
+        start_date = datetime(current_date.year, current_date.month, current_date.day, start_hour, start_minute)
+        add_job_if_not_exists(f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}", dindin, start_date)
+    for end_hour, end_minute in end_hour_minute:
+        end_date = datetime(current_date.year, current_date.month, current_date.day, end_hour, end_minute)
+        add_job_if_not_exists(f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}", dandalan, end_date)
 
 
 @dp.my_chat_member()
 async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
     """Автоматически привязывают юзера к группе
     - Вызывается при добавлении бота в группу
+    - Вызывается при удалении бота из группы
     """
     if event.chat.type == "private":
         return
@@ -854,11 +845,6 @@ async def process_location(message: types.Message, state: FSMContext):
     start_tag = f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}"
     end_tag = f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}"
     # Проверка: есть ли уже такие слоты в планировщике
-    def add_job_if_not_exists(job_tag, job_func, run_date):
-        if not any(job.id == job_tag for job in scheduler.get_jobs()):
-            scheduler.add_job(job_func, 'date', run_date=run_date,
-                              kwargs={"month": run_date.month, "date": run_date.day,
-                                      "hour": run_date.hour, "minute": run_date.minute}, id=job_tag)
     add_job_if_not_exists(start_tag, dindin, start_date)
     add_job_if_not_exists(end_tag, dandalan, end_date)
     await message.answer("Пара успешно добавлена!", reply_markup=kbregister)
