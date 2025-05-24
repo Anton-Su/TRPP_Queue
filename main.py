@@ -11,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.exceptions import TelegramBadRequest
 from schedule import refresh_schedule, get_schedule, sync
 from createdb import create
 import aiosqlite
@@ -94,20 +95,29 @@ class AddState(StatesGroup):
     location = State()
 
 
-async def triggerlistupdate(chat_id: int, message_id: int):
+async def lighttriggerlistupdate(id_zanyatia: int):
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(f'SELECT Id FROM Ochered WHERE Numseance = ? limit 1', (id_zanyatia,))
+            _next_user = await cursor.fetchone()
+            if _next_user[0]:
+                await bot.send_message(_next_user[0], "Привет, твоя очередь", reply_markup=kbpass)
+
+
+async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
     """
     Фф-я, созданная для обработки очереди. Вызывается
     После каждого нажатия кнопки или иного события, затрагивающего очередь.
     """
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE message_id =?', (message_id,))
+            await cursor.execute(f'SELECT Id, GroupName, Task FROM Timetable WHERE message_id = ?', (message_id,))
             _class = await cursor.fetchone()
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="Записаться", callback_data=f"query_handler_reg_{_class[0]}"),
-                     InlineKeyboardButton(text="Cдал", callback_data=f"query_handler_pass_{_class[0]}"),
-                     InlineKeyboardButton(text="Поменяться", callback_data=f"query_ustuply_pass_{_class[0]}")
+                     InlineKeyboardButton(text="Поменяться", callback_data=f"query_ustuply_pass_{_class[0]}"),
+                     InlineKeyboardButton(text="✅", callback_data=f"query_handler_pass_{_class[0]}")
                      ]
                 ]
             )
@@ -132,7 +142,7 @@ async def triggerlistupdate(chat_id: int, message_id: int):
                 reply_markup=keyboard,
                 parse_mode="MarkdownV2",
                 text=f'У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}')
-            if __people:
+            if __people and (personality_id == 1 or __people[0][3] == personality_id):
                 await bot.send_message(__people[0][3], "Привет, твоя очередь", reply_markup=kbpass)
 
 
@@ -152,16 +162,21 @@ async def dindin(month: int, date: int, hour: int, minute: int):
             async with conn.cursor() as cursor:
                 await cursor.execute("SELECT group_id, thread_id FROM All_groups Where GroupName = ?", (i[1],))
                 chat_id_thread = (await cursor.fetchall())[0]
-                msg = await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1], text=f"Генерация очереди пары...")
-                try:
-                    await bot.pin_chat_message(chat_id_thread[0], msg.message_id)
-                except:
-                    pass
-                await cursor.execute("UPDATE Timetable SET message_id = ? WHERE Id = ?", (msg.message_id, i[0]))
-                await conn.commit()
-        await triggerlistupdate(chat_id_thread[0], msg.message_id)
+                if chat_id_thread[0] is not None:
+                    msg = await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1], text=f"Генерация очереди пары...")
+                    try:
+                        await bot.pin_chat_message(chat_id_thread[0], msg.message_id)
+                    except TelegramBadRequest:
+                        await bot.send_message(chat_id=chat_id_thread[0], text="Бот не смог закрепить сообщение, сделайте его админом", reply_to_message_id=msg.message_id, allow_sending_without_reply=True)
+                    await cursor.execute("UPDATE Timetable SET message_id = ? WHERE Id = ?", (msg.message_id, i[0]))
+                    await conn.commit()
+                    await triggerlistupdate(chat_id_thread[0], msg.message_id, 1)
+                else:
+                    await lighttriggerlistupdate(i[0])
 
 
+
+# todo: разобраться с фейковым callback
 @dp.callback_query(F.data.startswith("query_handler_reg_"))
 async def query_handler_reg(call: CallbackQuery):
     """
@@ -175,8 +190,6 @@ async def query_handler_reg(call: CallbackQuery):
                 return await call.answer("Вы не зарегистрированы!", show_alert=True)
             _class_id = call.data.split("_")[-1]
             await cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, _class_id))
-            if await cursor.fetchone():
-                return await call.answer("Вы уже зарегистрированы!", show_alert=True)
             # Получение данных о занятии
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
                                  "WHERE Id = ?", (_class_id,))
@@ -192,8 +205,8 @@ async def query_handler_reg(call: CallbackQuery):
                 await handle_subject(call_data)
             except Exception:
                 pass
-            await triggerlistupdate(call.message.chat.id, call.message.message_id)
-    return await call.answer("Done!", show_alert=True)
+            await triggerlistupdate(call.message.chat.id, call.message.message_id, call.from_user.id)
+    return await call.answer("Done!")
 
 
 @dp.callback_query(F.data.startswith("query_ustuply_pass_"))
@@ -228,13 +241,14 @@ async def query_ustuply_pass(call: CallbackQuery):
                     UPDATE Ochered SET Poryadok = ? WHERE Id = ? AND Numseance = ?""", (next_poryadok, call.from_user.id, numseance))
                 await conn.commit()
                 await call.answer("Вы поменялись.")
-                return await triggerlistupdate(call.message.chat.id, call.message.message_id)
-            return await call.answer("За вами никого нет.")
+                return await triggerlistupdate(call.message.chat.id, call.message.message_id, next_user_id)
+            return await call.answer("За вами никого нет.", show_alert=True)
+
 
 @dp.callback_query(F.data.startswith("query_handler_pass_"))
 async def query_handler_pass(call: CallbackQuery):
     """
-    Фф-я для отмены записи пользователя (по тем или иным причинам).
+    Фф-я для сдачи записи пользователя.
     """
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
@@ -243,9 +257,12 @@ async def query_handler_pass(call: CallbackQuery):
             if await cursor.fetchone() is None:
                 return await call.answer("Вы не зарегистрированы!", show_alert=True)
             _class_id = call.data.split("_")[-1]
-            await cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, _class_id))
-            if await cursor.fetchone() is None:
-                return await call.answer("Вы не регистрировались на данную пару!", show_alert=True)
+            await cursor.execute("SELECT * FROM Ochered WHERE Numseance = ? order by Poryadok limit 1", (_class_id,))
+            result = await cursor.fetchone()
+            if result is None:
+                return await call.answer("Очередь пустая!", show_alert=True)
+            if result[1] != call.from_user.id:
+                return await call.answer("Вы не первый на данную пару!", show_alert=True)
             # Получение данных о занятии
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?", (_class_id,))
             _class_data = (await cursor.fetchall())[0]
@@ -260,9 +277,9 @@ async def query_handler_pass(call: CallbackQuery):
                 await handle_subject(call_data)
             except Exception:
                 pass
-            await triggerlistupdate(call.message.chat.id, call.message.message_id)
+            await triggerlistupdate(call.message.chat.id, call.message.message_id, 1)
     await bot.send_message(chat_id=call.from_user.id, text="Надеюсь, реально сдал", reply_markup=kbregister)
-    return await call.answer("Done!", show_alert=True)
+    return await call.answer("Надеюсь, реально сдал", show_alert=True)
 
 
 @dp.message(lambda message: message.text == "Сдал")  # Обработка псевдонима
@@ -294,17 +311,21 @@ async def handle_pass(message: Message):
                       current_day, current_month, current_day, current_hour, current_month, current_day,
                       current_hour, current_minute, GroupName))
             class_id = (await cursor.fetchone())[0]
-            await cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
-            if await cursor.fetchone():
+            await cursor.execute("SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok LIMIT 1", (class_id,))
+            first = (await cursor.fetchone())
+            if first and first[0] == user_id:
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (class_id, user_id))
+                await conn.commit()
                 await message.answer("Надеюсь, реально сдал!", reply_markup=kbregister)
-                await cursor.execute("SELECT group_id FROM All_groups Where GroupName = ?", (GroupName,))
-                chat_id_thread = (await cursor.fetchall())[0]
                 await cursor.execute("SELECT message_id FROM Timetable Where Id = ?", (class_id,))
                 message_id = (await cursor.fetchall())[0]
-                await conn.commit()
-                return await triggerlistupdate(chat_id_thread[0], message_id[0])
-            await conn.commit()
+                if message_id[0] is None:
+                    return await lighttriggerlistupdate(class_id)
+                await cursor.execute("SELECT group_id FROM All_groups Where GroupName = ?", (GroupName,))
+                chat_id_thread = (await cursor.fetchall())[0]
+                return await triggerlistupdate(chat_id_thread[0], message_id[0], 1)
+    if first:
+        return await message.answer("Ещё не время!")
     return await message.answer("Мы не нашли вас в очереди!")
 
 
@@ -319,17 +340,16 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
             await cursor.execute("SELECT GroupName, Id, message_id FROM Timetable WHERE End_Month = ? AND End_Day = ?"
                                  "AND End_Hour = ? AND End_Minute = ?", (month, date, hour, minute))
             _class = await cursor.fetchall()
-            for row in _class:
-                await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (row[1],))
-            try:
-                for row in _class:
-                    group_name, _, message_id = row
-                    await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,))
-                    chat_id = await cursor.fetchone()
-                    if chat_id:
-                        await bot.delete_message(chat_id[0], message_id)
-            except:
-                pass
+            for group_name, _, message_id in _class:
+                await cursor.execute("SELECT id FROM Ochered WHERE Numseance = ? limit 1", (_,))
+                last_people = await cursor.fetchone()
+                if last_people is not None:
+                    await bot.send_message(last_people[0], "Пара закончилась", reply_markup=kbregister)
+                await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (_,))
+                await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,))
+                chat_id = await cursor.fetchone()
+                if chat_id:
+                    await bot.delete_message(chat_id[0], message_id)
             await cursor.execute("DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
                                  (month, date, hour, minute))
             await conn.commit()
@@ -624,8 +644,23 @@ async def send_help(message: Message):
     """Обрабатывает команду /help, отправляет шуточное мотивационное сообщение."""
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
+    user_id = message.from_user.id
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,))
+            groupname = await cursor.fetchone()
+    if not groupname:
+        return await message.answer("Похоже, вы не зарегистрированы! Пропишите команду /register, затем создайте тематическую группу и добавьте в неё бота", reply_markup=kbnotregister)
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (groupname[0],))
+            group_id = await cursor.fetchone()
+    if not group_id[0]:
+        return await message.answer(
+            "Похоже, группы, в которую ваш бот добавлен, ещё не существует! Это сулит ограничением возможности до минимума. Добавьте бота в группу через 'добавить в группу'!",
+            reply_markup=kbregister)
     await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
-                         "Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbnotregister)
+                         "Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbregister)
 
 
 
