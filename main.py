@@ -43,6 +43,13 @@ kbpass = ReplyKeyboardMarkup( # Создаем кнопку, на которую
 MARKDOWN_V2_SPECIAL_CHARS = r"_*[\]()~`>#+-=|{}.!"
 
 
+def add_job_if_not_exists(job_tag, job_func, run_date):
+    if not any(job.id == job_tag for job in scheduler.get_jobs()):
+        scheduler.add_job(job_func, 'date', run_date=run_date,
+                          kwargs={"month": run_date.month, "date": run_date.day,
+                                  "hour": run_date.hour, "minute": run_date.minute}, id=job_tag)
+
+
 def escape_md(text: str) -> str:
     """
     Экранирует специальные символы MarkdownV2 в строке text, потому что кто-то решил удалить фф-ю из aiogram
@@ -99,7 +106,9 @@ async def triggerlistupdate(chat_id: int, message_id: int):
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="Записаться", callback_data=f"query_handler_reg_{_class[0]}"),
-                     InlineKeyboardButton(text="Cдал", callback_data=f"query_handler_pass_{_class[0]}"), ]
+                     InlineKeyboardButton(text="Cдал", callback_data=f"query_handler_pass_{_class[0]}"),
+                     InlineKeyboardButton(text="Поменяться", callback_data=f"query_ustuply_pass_{_class[0]}")
+                     ]
                 ]
             )
             await cursor.execute("SELECT NAME, Surname, Middle_name, Id FROM Users WHERE GroupName = ?", (_class[1],))
@@ -187,36 +196,40 @@ async def query_handler_reg(call: CallbackQuery):
     return await call.answer("Done!", show_alert=True)
 
 
-def add_job_if_not_exists(job_tag, job_func, run_date):
-    if not any(job.id == job_tag for job in scheduler.get_jobs()):
-        scheduler.add_job(job_func, 'date', run_date=run_date,
-                          kwargs={"month": run_date.month, "date": run_date.day,
-                                  "hour": run_date.hour, "minute": run_date.minute}, id=job_tag)
-
-
-async def delete_old_sessions():  # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+@dp.callback_query(F.data.startswith("query_ustuply_pass_"))
+async def query_ustuply_pass(call: CallbackQuery):
     """
-    Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
-    Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
-    Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
-    - Вызывает функцию dandalan
+    Фф-я для уступления места юзеру.
     """
-    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
-            current_date = datetime.now()
-            hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
-            # Получаем пары, которые уже начались
-            await cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
-            WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?)""",
-                                 (month, month, day, month, day, hour, month, day, hour, minute))
-            result = await cursor.fetchall()
-            for end_month, end_day, end_hour, end_minute in result:
-                end_datetime = datetime(current_date.year, end_month, end_day, end_hour, end_minute)
-                if current_date >= end_datetime:
-                    await dandalan(end_month, end_day, end_hour, end_minute)
-                else:
-                    add_job_if_not_exists(f"end_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}", dandalan, end_datetime)
-
+            # Проверка регистрации пользователя
+            await cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,))
+            if await cursor.fetchone() is None:
+                return await call.answer("Вы не зарегистрированы!", show_alert=True)
+            numseance = call.data.split("_")[-1]
+            await cursor.execute("SELECT Poryadok FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, numseance))
+            row = await cursor.fetchone()
+            if row is None:
+                return await call.answer("Вы не регистрировались на данную пару!", show_alert=True)
+            current_poryadok = row[0]
+            await cursor.execute("""
+                SELECT Id, Poryadok FROM Ochered WHERE Numseance = ? AND Poryadok > ?
+                ORDER BY Poryadok LIMIT 1""", (numseance, current_poryadok))
+            next_user = await cursor.fetchone()
+            if next_user:
+                next_user_id, next_poryadok = next_user
+                # Меняем местами Poryadok
+                await cursor.execute("""
+                    UPDATE Ochered SET Poryadok = -1 WHERE Id = ? AND Numseance = ?""", (call.from_user.id, numseance))
+                await cursor.execute("""
+                    UPDATE Ochered SET Poryadok = ? WHERE Id = ? AND Numseance = ?""", (current_poryadok, next_user_id, numseance))
+                await cursor.execute("""
+                    UPDATE Ochered SET Poryadok = ? WHERE Id = ? AND Numseance = ?""", (next_poryadok, call.from_user.id, numseance))
+                await conn.commit()
+                await call.answer("Вы поменялись.")
+                return await triggerlistupdate(call.message.chat.id, call.message.message_id)
+            return await call.answer("За вами никого нет.")
 
 @dp.callback_query(F.data.startswith("query_handler_pass_"))
 async def query_handler_pass(call: CallbackQuery):
@@ -320,6 +333,30 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
             await cursor.execute("DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
                                  (month, date, hour, minute))
             await conn.commit()
+
+
+async def delete_old_sessions():  # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+    """
+    Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
+    Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
+    Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
+    - Вызывает функцию dandalan
+    """
+    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+        async with conn.cursor() as cursor:
+            current_date = datetime.now()
+            hour, minute, day, month = current_date.hour, current_date.minute, current_date.day, current_date.month
+            # Получаем пары, которые уже начались
+            await cursor.execute("""SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
+            WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?)""",
+                                 (month, month, day, month, day, hour, month, day, hour, minute))
+            result = await cursor.fetchall()
+            for end_month, end_day, end_hour, end_minute in result:
+                end_datetime = datetime(current_date.year, end_month, end_day, end_hour, end_minute)
+                if current_date >= end_datetime:
+                    await dandalan(end_month, end_day, end_hour, end_minute)
+                else:
+                    add_job_if_not_exists(f"end_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}", dandalan, end_datetime)
 
 
 async def generate_calendar(raspisanie): # Функция для генерации клавиатуры-календаря
@@ -773,7 +810,7 @@ async def process_start(message: types.Message, state: FSMContext):
             await message.answer("Нельзя выбрать прошедшее время. Введите дату и время в будущем.")
             return
         await state.update_data(start=start_date)
-        await message.answer("Введите дату окончания пары в формате: ЧЧ:ММ (Например, 14:40)")
+        await message.answer("Введите время окончания пары в формате: ЧЧ:ММ (Например, 14:40)")
         await state.set_state(AddState.end)
     except ValueError:
         await message.answer("Неверный формат даты. Попробуйте снова: ДД.ММ ЧЧ:ММ")
@@ -898,7 +935,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
     - Завершает регистрацию, отправляя сообщение пользователю и очищая состояние.
     """
     user_data = await state.get_data()
-    middle_name = message.text.capitalize() if message.text != "-" else None
+    middle_name = message.text.capitalize() if message.text != "-" else ''
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("""INSERT INTO Users (ID, GroupName, NAME, SURNAME, MIDDLE_NAME) VALUES (?, ?, ?, ?, ?)""",
