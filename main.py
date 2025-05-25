@@ -668,7 +668,7 @@ async def send_help(message: Message):
     chat = await bot.get_chat(group_id[1])
     if chat.username is not None:
         return await message.reply(f"Вижу, группка для {group_id[0]} есть, но тебя в ней ней - держи её username: @{chat.username}")
-    return await message.reply(f"Сорян, но группка для {group_id[0]} это... немного частная, туда только по блату")
+    return await message.reply(f"Вижу, группка для {group_id[0]} есть, но тебя в ней ней. Сорян, но группка это... немного частная, туда только по блату")
 
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
@@ -790,6 +790,8 @@ async def register(message: types.Message, state: FSMContext):
     - Проверяет, зарегистрирован ли пользователь в базе данных.
     - Если нет, запрашивает у пользователя название группы и переводит FSM в состояние RegisterState.group.
     """
+    if message.chat.type != "private":
+        return
     user_id = message.from_user.id
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
@@ -825,6 +827,8 @@ async def new_register(message: types.Message, state: FSMContext):
     Обрабатывает добавлением юзером своей, неофициальной пары.
     - Если юзер зарегистрирован, пропускает дальше
     """
+    if message.chat.type != "private":
+        return
     user_id = message.from_user.id
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
@@ -842,15 +846,12 @@ async def new_register(message: types.Message, state: FSMContext):
 async def process_start(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод начала добавленного занятия.
-    - Если оно верно введено и не раньше текущего времени, то будет переход на конец занятия
+    - Если оно верно введено, то будет переход на ввод конца занятия
     """
     try:
         user_input = message.text.strip()
         parsed = datetime.strptime(user_input, "%d.%m %H:%M")
         start_date = datetime(year=datetime.now().year, month=parsed.month, day=parsed.day, hour=parsed.hour, minute=parsed.minute)
-        if start_date < datetime.now():
-            await message.answer("Нельзя выбрать прошедшее время. Введите дату и время в будущем.")
-            return
         await state.update_data(start=start_date)
         await message.answer("Введите время окончания пары в формате: ЧЧ:ММ (Например, 14:40)")
         await state.set_state(AddState.end)
@@ -875,7 +876,7 @@ async def process_end(message: types.Message, state: FSMContext):
             await message.answer("Дата окончания должна быть позже начала. Попробуйте снова.")
             return
         await state.update_data(end=end_date)
-        await message.answer("Введите название пары")
+        await message.answer("Введите название пары (до 14 символов)")
         await state.set_state(AddState.title)
     except ValueError:
         await message.answer("Неверный формат времени. Попробуйте снова: ЧЧ:ММ")
@@ -902,6 +903,9 @@ async def process_location(message: types.Message, state: FSMContext):
     data = await state.get_data()
     groupname, title = data['groupname'], data['title']
     location, start_date, end_date = data['location'], data['start'], data['end']
+    if start_date < datetime.now():
+        await message.answer("Нельзя выбрать прошедшее время. Введите дату и время в будущем.")
+        return
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             new_start_minutes = start_date.hour * 60 + start_date.minute
