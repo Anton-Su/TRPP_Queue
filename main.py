@@ -635,13 +635,13 @@ async def command_start_handler(message: Message) -> None:
 async def command_start_handler(message: Message) -> None:
     """Обрабатывает команду /start, приветствует пользователя и предлагает зарегистрироваться."""
     await message.answer("Привет! Я бот, который регулирует процесс очереди, записываю, отписываю, закрепляю, слежу, и всё такое. Просто зарегистрируйся, добавь бота в группу вашей группы и следуй командам, "
-                         "и ты сможешь записываться на занятия, и больше не будешь полагаться на авось", reply_markup=kbnotregister)
+                         "и ты сможешь записываться на занятия, и больше не будешь полагаться на авось. Используй /help для отслеживания твоего состояния.", reply_markup=kbnotregister)
 
 
 @dp.message(Command("help")) # Функция для обработки команды /help
 @dp.message(lambda message: message.text == "Помощь")  # Обрабатываем и "Помощь"
 async def send_help(message: Message):
-    """Обрабатывает команду /help, отправляет шуточное мотивационное сообщение."""
+    """Обрабатывает команду /help, проверяя статус собеседника. Если всё в порядке, выдаёт шуточное сообщение."""
     #await message.answer("ААААА! Альтушкааааа в белых чулочкаааах", reply_markup=kbnotregister)
     #await message.answer("Не делай добра, не получишь и зла!", reply_markup=kbnotregister)
     user_id = message.from_user.id
@@ -653,15 +653,22 @@ async def send_help(message: Message):
         return await message.answer("Похоже, вы не зарегистрированы! Пропишите команду /register, затем создайте тематическую группу и добавьте в неё бота", reply_markup=kbnotregister)
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (groupname[0],))
+            await cursor.execute("SELECT GroupName, group_id FROM All_groups WHERE GroupName = ?", (groupname[0],))
             group_id = await cursor.fetchone()
-    if not group_id[0]:
+    if not group_id[1]:
         return await message.answer(
-            "Похоже, группы, в которую ваш бот добавлен, ещё не существует! Это сулит ограничением возможности до минимума. Добавьте бота в группу через 'добавить в группу'!",
+            f"Похоже, группа для {group_id[0]} ещё не создана в телеграмме! Это сулит ограничением возможностей до минимума. Создайте беседу и добавьте в неё бота через 'добавить в группу'!",
             reply_markup=kbregister)
-    await message.answer("Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
-                         "Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!", reply_markup=kbregister)
-
+    member = await bot.get_chat_member(group_id[1], user_id)
+    if member.status in ['member', 'administrator', 'creator', 'restricted', 'kicked']:
+        return await message.answer(
+            "Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
+"Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!",
+            reply_markup=kbregister)
+    chat = await bot.get_chat(group_id[1])
+    if chat.username is not None:
+        return await message.reply(f"Вижу, группка для {group_id[0]} есть, но тебя в ней ней - держи её username: @{chat.username}")
+    return await message.reply(f"Сорян, но группка для {group_id[0]} это... немного частная, туда только по блату")
 
 
 @dp.callback_query(F.data.startswith("back_to_calendar_"))
@@ -1017,8 +1024,7 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/link", description="Привязать бота к топику"),
         BotCommand(command="/unlink", description="Отвязать бота от чата"),
         BotCommand(command="/pass", description="Подтвердить посещение"),
-        BotCommand(command="/help", description="Ценный совет"),
-        BotCommand(command="/start", description="Начальная команда"),
+        BotCommand(command="/help", description="Проверить свой статус"),
         BotCommand(command="/register", description="Зарегистрироваться в системе"),
         BotCommand(command="/stats", description="Статистика"),
         BotCommand(command="/exit", description="Выход из системы"),
