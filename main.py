@@ -117,7 +117,7 @@ async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
                 inline_keyboard=[
                     [InlineKeyboardButton(text="Записаться", callback_data=f"query_handler_reg_{_class[0]}"),
                      InlineKeyboardButton(text="Поменяться", callback_data=f"query_ustuply_pass_{_class[0]}"),
-                     InlineKeyboardButton(text="✅", callback_data=f"query_handler_pass_{_class[0]}")
+                     InlineKeyboardButton(text="Сдать", callback_data=f"query_handler_pass_{_class[0]}")
                      ]
                 ]
             )
@@ -173,40 +173,6 @@ async def dindin(month: int, date: int, hour: int, minute: int):
                     await triggerlistupdate(chat_id_thread[0], msg.message_id, 1)
                 else:
                     await lighttriggerlistupdate(i[0])
-
-
-
-# todo: разобраться с фейковым callback
-@dp.callback_query(F.data.startswith("query_handler_reg_"))
-async def query_handler_reg(call: CallbackQuery):
-    """
-    ФФ-я для записи пользователя, используя инлайн клавиатуру.
-    """
-    async with aiosqlite.connect(DATABASE_NAME) as conn:
-        async with conn.cursor() as cursor:
-            # Проверка регистрации пользователя
-            await cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,))
-            if await cursor.fetchone() is None:
-                return await call.answer("Вы не зарегистрированы!", show_alert=True)
-            _class_id = call.data.split("_")[-1]
-            await cursor.execute("SELECT * FROM Ochered WHERE Id = ? AND Numseance = ?", (call.from_user.id, _class_id))
-            # Получение данных о занятии
-            await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
-                                 "WHERE Id = ?", (_class_id,))
-            _class_data = (await cursor.fetchall())[0]
-            call_data = types.CallbackQuery(
-                id=call.id,
-                from_user=call.from_user,
-                data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
-                message=call.message,
-                chat_instance=call.chat_instance
-            )
-            try:
-                await handle_subject(call_data)
-            except Exception:
-                pass
-            await triggerlistupdate(call.message.chat.id, call.message.message_id, call.from_user.id)
-    return await call.answer("Done!")
 
 
 @dp.callback_query(F.data.startswith("query_ustuply_pass_"))
@@ -266,20 +232,36 @@ async def query_handler_pass(call: CallbackQuery):
             # Получение данных о занятии
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?", (_class_id,))
             _class_data = (await cursor.fetchall())[0]
-            call_data = types.CallbackQuery(
-                id=call.id,
-                from_user=call.from_user,
-                data=f'subject_{_class_data[0]}_{_class_data[1]}_{_class_data[2]}_{_class_data[3]}_{_class_data[4]}_{_class_data[5]}',
-                message=call.message,
-                chat_instance=call.chat_instance
-            )
-            try:
-                await handle_subject(call_data)
-            except Exception:
-                pass
+            await handle_subject_uni(call.from_user.id, _class_data[5], _class_data[0], _class_data[1], _class_data[2], _class_data[3], _class_data[4])
             await triggerlistupdate(call.message.chat.id, call.message.message_id, 1)
     await bot.send_message(chat_id=call.from_user.id, text="Надеюсь, реально сдал", reply_markup=kbregister)
     return await call.answer("Надеюсь, реально сдал", show_alert=True)
+
+
+@dp.callback_query(F.data.startswith("query_handler_reg_"))
+async def query_handler_reg(call: CallbackQuery):
+    """
+    ФФ-я для записи/отмены записи пользователя, используя инлайн клавиатуру.
+    """
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            # Проверка регистрации пользователя
+            await cursor.execute("SELECT * FROM Users WHERE Id = ?", (call.from_user.id,))
+            if await cursor.fetchone() is None:
+                return await call.answer("Вы не зарегистрированы!", show_alert=True)
+            _class_id = call.data.split("_")[-1]
+            await cursor.execute("SELECT * FROM Ochered WHERE Numseance = ? order by Poryadok limit 1", (_class_id,))
+            result = await cursor.fetchone()
+            if result and result[1] == call.from_user.id:
+                return await call.answer("Используйте 'Сдать'!", show_alert=True)
+            # Получение данных о занятии
+            await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
+                                 "WHERE Id = ?", (_class_id,))
+            _class_data = (await cursor.fetchall())[0]
+            result = await handle_subject_uni(call.from_user.id, _class_data[5], _class_data[0], _class_data[1], _class_data[2], _class_data[3], _class_data[4])
+            await triggerlistupdate(call.message.chat.id, call.message.message_id, call.from_user.id)
+    return await call.answer(result)
+
 
 
 @dp.message(lambda message: message.text == "Сдал")  # Обработка псевдонима
@@ -750,8 +732,7 @@ async def show_schedule(callback: CallbackQuery):
     await callback.message.edit_text("Выберите предмет:", reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard))
 
 
-@dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
-async def handle_subject(callback: CallbackQuery):
+async def handle_subject_uni(user_id: int, groupname: str, month: str, day: str, hour: str, minute: str, location: str):
     """
     Обрабатывает выбор предмета пользователем.
     - Извлекает информацию о выбранном предмете из callback-запроса.
@@ -759,8 +740,6 @@ async def handle_subject(callback: CallbackQuery):
     - Если записан, удаляет его из очереди.
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
-    _, month, day, hour, minute, location, groupname = callback.data.split("_")
-    user_id = callback.from_user.id
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
@@ -774,12 +753,23 @@ async def handle_subject(callback: CallbackQuery):
             if await cursor.fetchone():
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
                 await conn.commit()
-                return await callback.answer("Запись отменена!")
+                return "Запись отменена!"
             await cursor.execute("INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)", (numseance, user_id, new_poryadok))
             await conn.commit()
             await cursor.execute("SELECT COUNT(*) FROM Ochered WHERE Numseance = ?", (numseance,))
             queue_position = (await cursor.fetchone())[0]
-            await callback.answer(f"Успешно! Ваш номер в очереди: {queue_position}")
+            return f"Успешно! Ваш номер в очереди: {queue_position}"
+
+
+@dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
+async def handle_subject(callback: CallbackQuery):
+    """
+    call-back запрос
+    """
+    _, month, day, hour, minute, location, groupname = callback.data.split("_")
+    user_id = callback.from_user.id
+    message = await handle_subject_uni(user_id, groupname, month, day, hour, minute, location)
+    return await callback.answer(message)
 
 
 @dp.message(Command("register"))  # Обработчик команды /register
@@ -904,7 +894,7 @@ async def process_location(message: types.Message, state: FSMContext):
     groupname, title = data['groupname'], data['title']
     location, start_date, end_date = data['location'], data['start'], data['end']
     if start_date < datetime.now():
-        await message.answer("Нельзя выбрать прошедшее время. Введите дату и время в будущем.")
+        await message.answer("Нельзя выбрать прошедшее время. Попробуйте снова создать пару.", reply_markup=kbregister)
         return
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
@@ -915,7 +905,7 @@ async def process_location(message: types.Message, state: FSMContext):
                                  (groupname, start_date.month, start_date.day, end_date.month, end_date.day, new_end_minutes, new_start_minutes))
             conflict_pair = await cursor.fetchone()
             if conflict_pair:
-                await message.answer(f"Не забивай на свои же пары, студент {groupname}!")
+                await message.answer(f"Не забивай на свои же пары, студент {groupname}!", reply_markup=kbregister)
                 await state.clear()
                 return
             await cursor.execute("""INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Month, Start_Day, 
