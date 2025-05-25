@@ -9,7 +9,6 @@ from aiogram.types import (Message, ReplyKeyboardMarkup, KeyboardButton, InlineK
                            CallbackQuery, BotCommand)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pydantic import ValidationError
-
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -42,7 +41,6 @@ kbpass = ReplyKeyboardMarkup( # Создаем кнопку, на которую
     keyboard=[
         [KeyboardButton(text="Сдал")]
     ], resize_keyboard=True, one_time_keyboard=True)
-
 MARKDOWN_V2_SPECIAL_CHARS = r"_*[\]()~`>#+-=|{}.!"
 
 
@@ -264,7 +262,6 @@ async def query_handler_reg(call: CallbackQuery):
             result = await handle_subject_uni(call.from_user.id, _class_data[5], _class_data[0], _class_data[1], _class_data[2], _class_data[3], _class_data[4])
             await triggerlistupdate(call.message.chat.id, call.message.message_id, call.from_user.id)
     return await call.answer(result)
-
 
 
 @dp.message(lambda message: message.text == "Сдал")  # Обработка псевдонима
