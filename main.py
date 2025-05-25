@@ -207,6 +207,7 @@ async def query_ustuply_pass(call: CallbackQuery):
                     UPDATE Ochered SET Poryadok = ? WHERE Id = ? AND Numseance = ?""", (next_poryadok, call.from_user.id, numseance))
                 await conn.commit()
                 await call.answer("Вы поменялись.")
+                await bot.send_message(chat_id=call.from_user.id, text="Вы поменялись", reply_markup=kbregister)
                 return await triggerlistupdate(call.message.chat.id, call.message.message_id, next_user_id)
             return await call.answer("За вами никого нет.", show_alert=True)
 
