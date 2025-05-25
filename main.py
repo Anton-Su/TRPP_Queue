@@ -8,6 +8,8 @@ from aiogram.filters import Command
 from aiogram.types import (Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup,
                            CallbackQuery, BotCommand)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from pydantic import ValidationError
+
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -446,7 +448,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
                 except TypeError:
                     await bot.send_message(chat_id, "Прикалываешься? Юзер не зарегистрирован в системе.")
                     return await bot.leave_chat(chat_id)
-                except TelegramAPIError:
+                except ValidationError:
                     await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?", (chat_id, user_group))
                     await conn.commit()
                     return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
