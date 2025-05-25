@@ -278,7 +278,7 @@ async def handle_pass(message: Message):
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT GroupName FROM Users WHERE Id = ?", (user_id,))
-            GroupName = (await cursor.fetchone())[0]
+            groupname = (await cursor.fetchone())[0]
             await cursor.execute("""
                 SELECT Id
                 FROM Timetable
@@ -292,7 +292,7 @@ async def handle_pass(message: Message):
                 """, (current_month, current_month, current_day, current_month, current_day, current_hour,
                       current_month, current_day, current_hour, current_minute, current_month, current_month,
                       current_day, current_month, current_day, current_hour, current_month, current_day,
-                      current_hour, current_minute, GroupName))
+                      current_hour, current_minute, groupname))
             class_id = (await cursor.fetchone())[0]
             await cursor.execute("SELECT Id FROM Ochered WHERE Numseance = ? ORDER BY Poryadok LIMIT 1", (class_id,))
             first = (await cursor.fetchone())
@@ -304,7 +304,7 @@ async def handle_pass(message: Message):
                 message_id = (await cursor.fetchall())[0]
                 if message_id[0] is None:
                     return await lighttriggerlistupdate(class_id)
-                await cursor.execute("SELECT group_id FROM All_groups Where GroupName = ?", (GroupName,))
+                await cursor.execute("SELECT group_id FROM All_groups Where GroupName = ?", (groupname,))
                 chat_id_thread = (await cursor.fetchall())[0]
                 return await triggerlistupdate(chat_id_thread[0], message_id[0], 1)
     if first:
