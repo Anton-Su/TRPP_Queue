@@ -254,7 +254,7 @@ async def query_handler_reg(call: CallbackQuery):
             await cursor.execute("SELECT * FROM Ochered WHERE Numseance = ? order by Poryadok limit 1", (_class_id,))
             result = await cursor.fetchone()
             if result and result[1] == call.from_user.id:
-                return await call.answer("Используйте 'Сдать'!", show_alert=True)
+                return await call.answer("Используйте «Сдать»!", show_alert=True)
             # Получение данных о занятии
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
                                  "WHERE Id = ?", (_class_id,))
