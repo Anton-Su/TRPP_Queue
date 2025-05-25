@@ -11,7 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError
 from schedule import refresh_schedule, get_schedule, sync
 from createdb import create
 import aiosqlite
@@ -166,7 +166,7 @@ async def dindin(month: int, date: int, hour: int, minute: int):
                     msg = await bot.send_message(chat_id=chat_id_thread[0], message_thread_id=chat_id_thread[1], text=f"Генерация очереди пары...")
                     try:
                         await bot.pin_chat_message(chat_id_thread[0], msg.message_id)
-                    except TelegramBadRequest:
+                    except TelegramAPIError:
                         await bot.send_message(chat_id=chat_id_thread[0], text="Бот не смог закрепить сообщение, сделайте его админом", reply_to_message_id=msg.message_id, allow_sending_without_reply=True)
                     await cursor.execute("UPDATE Timetable SET message_id = ? WHERE Id = ?", (msg.message_id, i[0]))
                     await conn.commit()
@@ -446,7 +446,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
                 except TypeError:
                     await bot.send_message(chat_id, "Прикалываешься? Юзер не зарегистрирован в системе.")
                     return await bot.leave_chat(chat_id)
-                except Exception:
+                except TelegramAPIError:
                     await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?", (chat_id, user_group))
                     await conn.commit()
                     return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
