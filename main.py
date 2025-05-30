@@ -330,7 +330,7 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (_,))
                 await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,))
                 chat_id = await cursor.fetchone()
-                if chat_id:
+                if chat_id and message_id:
                     await bot.delete_message(chat_id[0], message_id)
             await cursor.execute("DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
                                  (month, date, hour, minute))
