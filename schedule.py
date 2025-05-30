@@ -1,3 +1,5 @@
+from types import NoneType
+
 import aiohttp
 from icalendar import Calendar
 import aiosqlite
@@ -74,9 +76,37 @@ async def get_schedule(url, groupname):
                                 dtend = component.get('dtend').dt
                                 summary = component.get('summary').replace('ПР ', "", 1)
                                 location = component.get('location').strip('Дистанционно ')
-                                exdate = component.get('exdate').dts
-                                exd = [i.dt.replace(tzinfo=None) for i in exdate] # список datetime исключений
-                                await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None), summary, teacher_fio, location, groupname, exd)
+                                try:
+                                    exdate = component.get('exdate').dts
+                                    exd = [i.dt.replace(tzinfo=None) for i in exdate] # список datetime исключений
+                                    await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None),
+                                                            summary, teacher_fio, location, groupname, exd)
+                                except AttributeError:
+                                    # сессия, детка
+                                    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+                                        async with conn.cursor() as cursor:
+                                            start_date = dtstart.replace(tzinfo=None)
+                                            end_date = dtend.replace(tzinfo=None)
+                                            if summary.startswith("З"):
+                                                summary = summary.replace("З", "ЗАЧ")
+                                            else:
+                                                summary = summary.replace("Э", "ЭКЗ")
+                                            await cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ?
+                                                                 AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ?
+                                                                 AND Start_Minute = ? AND LOCATION = ?""", (
+                                            groupname, teacher_fio, summary, start_date.month, start_date.day,
+                                            start_date.hour, start_date.minute, location))
+                                            exists = await cursor.fetchone()
+                                            if not exists:
+                                                await cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task,
+                                                                    Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location)
+                                                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                                                     (groupname, teacher_fio, summary, start_date.month,
+                                                                      start_date.day,
+                                                                      start_date.hour, start_date.minute,
+                                                                      end_date.month, end_date.day,
+                                                                      end_date.hour, end_date.minute, location))
+                                                await conn.commit()
                 else:
                     print(f"⚠ Ошибка {response.status} для {url}")
         except Exception as e:
