@@ -87,9 +87,9 @@ async def get_schedule(url, groupname):
                                         async with conn.cursor() as cursor:
                                             start_date = dtstart.replace(tzinfo=None)
                                             end_date = dtend.replace(tzinfo=None)
-                                            if summary.startswith("З"):
-                                                summary = summary.replace("З", "ЗАЧ")
-                                            else:
+                                            # if summary.startswith("З"):
+                                            #     summary = summary.replace("З", "ЗАЧ")
+                                            if summary.startswith("Э"):
                                                 summary = summary.replace("Э", "ЭКЗ")
                                             await cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ?
                                                                  AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ?

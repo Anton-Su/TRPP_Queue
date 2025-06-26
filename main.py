@@ -1026,8 +1026,8 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/sync", description="Синхронизировать расписание"),
     ])
     bd = create()
-    await delete_old_sessions()
     await refresh_schedule()
+    await delete_old_sessions()
     if bd:
         await form_correctslinksstep_two(7000, scheduler)
     await generatescheduler_to_currect_day() # начальные три действия
