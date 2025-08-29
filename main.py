@@ -639,7 +639,7 @@ async def send_help(message: Message):
             group_id = await cursor.fetchone()
     if not group_id[1]:
         return await message.answer(
-            f"Похоже, сообщество для «{group_id[0]}» ещё не создано в телеграмме! Это сулит ограничением возможностей до минимума. Создайте беседу и добавьте в неё бота через «добавить в группу» в её настройках!",
+            f"Похоже, сообщество для «{group_id[0]}» ещё не создано в телеграмме! Это сулит ограничением возможностей до минимума. Создайте беседу и добавьте в неё бота через «добавить в группу» в настройках ботика!",
             reply_markup=kbregister)
     member = await bot.get_chat_member(group_id[1], user_id)
     if member.status in ['member', 'administrator', 'creator', 'restricted', 'kicked']:
