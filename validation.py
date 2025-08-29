@@ -94,3 +94,4 @@ async def form_correctslinksstep_two(stop, scheduler):
                                 print(f"⚠ Ошибка {response.status} для {url}")
                     except Exception as e:
                         print(f"⚠ Ошибка для {url}: {e}")
+    print("Процесс окончен!!!")

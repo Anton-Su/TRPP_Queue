@@ -19,7 +19,7 @@ import aiosqlite
 import logging
 import asyncio
 
-
+depth_search = 20000 # глубина поиска для валидации
 limitGroupbyOne = 1  # Лимит групп на одного пользователя
 
 load_dotenv() # получаю значение токена из специального файла
@@ -1070,7 +1070,7 @@ async def main_async() -> None: # Run the bot
     - Обновление расписания каждое воскресенье в 00:30.
     - Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
     - Генерация расписания пар на текущий день каждый день в 07:30.
-    Если база данных не создана, вызывается функция `form_correctslinksstep_two` с параметрами 7000 и `scheduler`.
+    Если база данных не создана, вызывается функция `form_correctslinksstep_two` с параметрами depthsearch и `scheduler`.
     """
     await bot.set_my_commands([
         BotCommand(command="/add_pair", description="Добавить уникальное занятие"),
@@ -1088,14 +1088,14 @@ async def main_async() -> None: # Run the bot
     bd = create()
     await refresh_schedule()
     await delete_old_sessions()
-    # if need insta new data await form_correctslinks(7000, scheduler, bot)
+    #await form_correctslinks(depth_search, scheduler, bot) # для моментального перезапуска всего
     if bd:
-        await form_correctslinksstep_two(7000, scheduler)
+        await form_correctslinksstep_two(depth_search, scheduler)
     await generatescheduler_to_currect_day() # начальные три действия
     scheduler.add_job(refresh_schedule, trigger='cron', hour=0, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, kwargs= {"stop": 7000, "scheduler": scheduler, "bot": bot})
+    scheduler.add_job(form_correctslinks, 'cron', month=9, day=1, hour=0, minute=30, kwargs= {"stop": depth_search, "scheduler": scheduler, "bot": bot})
     scheduler.add_job(generatescheduler_to_currect_day, trigger='cron', hour=7, minute=30)
-    scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, kwargs= {"stop": 7000, "scheduler": scheduler, "bot": bot})
+    scheduler.add_job(form_correctslinks, 'cron', month=2, day=1, hour=0, minute=30, kwargs= {"stop": depth_search, "scheduler": scheduler, "bot": bot})
     scheduler.start()
     await dp.start_polling(bot)
 
