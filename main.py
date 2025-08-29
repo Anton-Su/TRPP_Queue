@@ -1,10 +1,12 @@
 from datetime import datetime
 from os import getenv
 import re
+
+from aiogram.dispatcher import router
 from aiogram.types import ChatMemberUpdated
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.types import (Message, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup,
                            CallbackQuery, BotCommand)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -537,7 +539,7 @@ async def command_start_handler(message: Message) -> None:
         text = ", ".join(f"«{row[0]}»" for row in group_creates)
         await message.answer("👑 👑 👑 Создатель групп: " + text)
     if not result:
-        await message.answer("На данный момент вы не записаны ни на одно занятие")
+        await message.answer("На данный момент вы не записаны ни на одно занятие. Записаться - /record")
         return
     results = []
     year = datetime.now().year
@@ -828,7 +830,7 @@ async def add_group(message: types.Message) -> Message:
     parts = message.text.strip().split(maxsplit=1)
     if len(parts) != 2:
         return await message.answer("Вы не указали название группы. Используйте /add_group название_группы", reply_markup=kbnotregister)
-    nameGroup = parts[1]
+    nameGroup = parts[1].upper()
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         try:
             async with conn.cursor() as cursor:
@@ -851,7 +853,7 @@ async def delete_group(message: types.Message) -> Message:
     parts = message.text.strip().split(maxsplit=1)
     if len(parts) != 2:
         return await message.answer("Вы не указали название группы. Используйте /delete_group название_группы", reply_markup=kbnotregister)
-    nameGroup = parts[1]
+    nameGroup = parts[1].upper()
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT 1 FROM GroupCreaters WHERE Id = ? AND GroupName = ?", (user_id, nameGroup))
@@ -979,6 +981,9 @@ async def process_location(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+# по-хорошему, нужна программа на принудительную остановку fms-состояний
+
+
 @dp.message(RegisterState.group)  # Обработка ввода группы
 async def process_group(message: types.Message, state: FSMContext):
     """
@@ -991,11 +996,10 @@ async def process_group(message: types.Message, state: FSMContext):
     await state.update_data(group=message.text.upper())
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (message.text.upper(),))
-            group_number = await cursor.fetchone()
-    if not group_number:
+            await cursor.execute("SELECT 1 FROM Session WHERE GroupName = ?", (message.text.upper(),))
+            group_exist = await cursor.fetchone()
+    if not group_exist:
         await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
-        await state.clear()
         return
     await message.answer("Введите ваше имя:")
     await state.set_state(RegisterState.name)
@@ -1084,6 +1088,7 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/record", description="Забронировать / отменить бронь"),
         BotCommand(command="/sync", description="Синхронизировать расписание"),
         BotCommand(command="/add_group", description="Добавить группу. Через пробел указать название"),
+        # BotCommand(command="/cancel", description="Остановить процесс с этапами принудительно")
     ])
     bd = create()
     await refresh_schedule()
