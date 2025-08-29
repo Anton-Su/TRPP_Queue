@@ -1,7 +1,7 @@
 from datetime import datetime
 from os import getenv
 import re
-from aiogram.types import ChatMemberUpdated, Message
+from aiogram.types import ChatMemberUpdated
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
