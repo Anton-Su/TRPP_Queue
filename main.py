@@ -1,7 +1,9 @@
 from datetime import datetime
 from os import getenv
 import re
-from aiogram.types import ChatMemberUpdated
+from typing import Any, Coroutine
+
+from aiogram.types import ChatMemberUpdated, Message
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -608,7 +610,7 @@ async def command_start_handler(message: Message) -> None:
                     await bot.leave_chat(group_id)
                 await cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
                 await cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-                await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» распущена!")
+                await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» расформирована!")
             await conn.commit()
     await message.answer("😢😢😢Очень жаль с вами расставаться, Юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
@@ -632,19 +634,19 @@ async def send_help(message: Message):
             await cursor.execute("SELECT GroupName FROM Users WHERE ID = ?", (user_id,))
             groupname = await cursor.fetchone()
     if not groupname:
-        return await message.answer("Похоже, вы не зарегистрированы! Пропишите команду /register, затем создайте тематическую группу и добавьте в неё бота", reply_markup=kbnotregister)
+        return await message.answer("Похоже, вы не зарегистрированы! Пропишите команду /register, затем создайте тематическую группу в телеграмме и добавьте в неё бота. Дело касается не всей группы? Воспользуйтесь /add_group с аргументом название и создайте собственную группу!", reply_markup=kbnotregister)
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT GroupName, group_id FROM All_groups WHERE GroupName = ?", (groupname[0],))
             group_id = await cursor.fetchone()
     if not group_id[1]:
         return await message.answer(
-            f"Похоже, группа для {group_id[0]} ещё не создана в телеграмме! Это сулит ограничением возможностей до минимума. Создайте беседу и добавьте в неё бота через 'добавить в группу'!",
+            f"Похоже, сообщество для «{group_id[0]}» ещё не создано в телеграмме! Это сулит ограничением возможностей до минимума. Создайте беседу и добавьте в неё бота через «добавить в группу» в её настройках!",
             reply_markup=kbregister)
     member = await bot.get_chat_member(group_id[1], user_id)
     if member.status in ['member', 'administrator', 'creator', 'restricted', 'kicked']:
         return await message.answer(
-            "Через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
+            "Всё оки! Держи советик - через 20 лет вы будете больше разочарованы теми вещами, которые вы не делали, чем теми, которые вы сделали. "
 "Так отчальте от тихой пристани. Почувствуйте попутный ветер в вашем парусе. Двигайтесь вперед, действуйте, открывайте!",
             reply_markup=kbregister)
     chat = await bot.get_chat(group_id[1])
@@ -808,6 +810,29 @@ async def new_register(message: types.Message) -> None:
         await message.answer("Запрос выполнен!", reply_markup=kbregister)
     else:
         await message.answer("Вы не зарегистрированы. Сначала выполните регистрацию.", reply_markup=kbnotregister)
+
+
+@dp.message(Command("add_group"))
+async def add_group(message: types.Message) -> Message:
+    """Обрабатывает команду /add_group название, добавляя группу юзера по запросу."""
+    # по-хорошему, тут надо бы проверить, что команду не злоупотребляют (один юзер создаёт максимум одну группу), но это долго (типа привязка к id юзера), изменение процесса регистрации
+    # из этого вытекает создание команды удаления группы юзером, который её создал, либо всеобщим админом (очередная перемена окружения), но это тоже долго
+    # или типа создать новую таблицу GroupCreators с полями GroupName и CreatorID, и проверять её при создании группы
+    # и в Session сделать поле CreatorID, типа внешний ключ на GroupCreators, ха-ха-ха, кто это вообще читать будет?
+    # да и вообще, кто будет создавать группы, если можно просто зарегистрироваться в уже существующей?
+    # ладно, потом доделаю, когда будет время и желание
+    parts = message.text.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return await message.answer("Вы не указали название группы. Используйте /add_group название_группы", reply_markup=kbnotregister)
+    nameGroup = parts[1]
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        try:
+            async with conn.cursor() as cursor:
+                await cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)", (nameGroup, "NOOOO"),)
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            return await message.answer("Группа с таким названием уже существует", reply_markup=kbnotregister)
+    return await message.answer(f"Группа «{nameGroup}» создана!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("add_pair"))
@@ -983,12 +1008,15 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                 await conn.commit()
                 await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
                 url_data = await cursor.fetchone()
+                url_data = str(url_data[0])
+                if url_data == "NOOOO":
+                    return
                 current_hash = await get_link_with_current_hash()
                 if not current_hash:
                     await message.answer("✅ Регистрация завершена, группа создана, но сайт миреа точка ру не отвечает, расписание не подгружено "
                                          "(maybe, bot hosts not in Russia?)", reply_markup=kbregister)
                     return
-                url = current_hash + str(url_data[0])
+                url = current_hash + url_data
                 await get_schedule(url, user_data['group'])
                 await generatescheduler_to_currect_day()
     await message.answer("✅ Регистрация завершена!", reply_markup=kbregister)
@@ -1024,6 +1052,7 @@ async def main_async() -> None: # Run the bot
         BotCommand(command="/exit", description="Выход из системы"),
         BotCommand(command="/record", description="Забронировать / отменить бронь"),
         BotCommand(command="/sync", description="Синхронизировать расписание"),
+        BotCommand(command="/add_group", description="Добавить группу. Через пробел указать название"),
     ])
     bd = create()
     await refresh_schedule()

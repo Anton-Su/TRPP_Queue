@@ -44,7 +44,7 @@ async def form_correctslinks(stop, scheduler, bot):
             for group_id in group_ids:# Отправляем сообщения и выходим из чатов
                 if group_id:
                     try:
-                        await bot.send_message(group_id, "Запущен процесс обновления ссылок, не беспокоить в течение часа")
+                        await bot.send_message(group_id, "Запущен процесс обновления ссылок (конец полугодия), не беспокоить в течение часа")
                         await bot.leave_chat(group_id)
                     except Exception as e:
                         print(f"Ошибка при работе с чатом {group_id}: {e}")
