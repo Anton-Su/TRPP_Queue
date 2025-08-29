@@ -1,5 +1,3 @@
-from types import NoneType
-
 import aiohttp
 from icalendar import Calendar
 import aiosqlite
@@ -31,6 +29,8 @@ async def refresh_schedule():  # обновить расписание
                 group_name = group[0]
                 await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,))
                 group_number = (await cursor.fetchone())[0]
+                if group_number is None:
+                    continue
                 url = currect_hash + str(group_number)
                 await get_schedule(url, group_name)
 
@@ -43,15 +43,16 @@ async def sync(group_name):  # обновить расписание по зап
     1. Извлекает URL, связанный с группой.
     2. вызывает функцию `get_schedule`, чтобы обновить расписание.
     """
-    currect_hash = await get_link_with_current_hash()
-    if not currect_hash:
-        return
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,))
             group_number = (await cursor.fetchone())[0]
-            url = currect_hash + str(group_number)
-            await get_schedule(url, group_name)
+            if group_number is not None:
+                currect_hash = await get_link_with_current_hash()
+                if not currect_hash:
+                    return
+                url = currect_hash + str(group_number)
+                await get_schedule(url, group_name)
 
 
 async def get_schedule(url, groupname):
@@ -131,10 +132,14 @@ async def generate_schedule(start_date, end_date, description, teacher, location
     7) exdate: Список дат исключений.
     """
     current_date = datetime.now()
-    if current_date.month > 1:  # Конец семестра: если после января, конец семестра - май
-        end_of_semester = datetime(current_date.year, 6, 16)
-    else:
-        end_of_semester = datetime(current_date.year, 2, 4)
+    if 2 <= current_date.month <= 7:  # весенний семестр
+        end_of_semester = datetime(current_date.year, 7, 10)
+    else:  # зимний семестр
+        if current_date.month >= 8:
+            end_of_semester = datetime(current_date.year + 1, 2, 4)
+        else:
+            end_of_semester = datetime(current_date.year, 2, 4)
+    #print(end_of_semester)
     end_date += timedelta(minutes=peremen_minutes)
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:

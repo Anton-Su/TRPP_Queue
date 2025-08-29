@@ -69,7 +69,7 @@ async def form_correctslinksstep_two(stop, scheduler):
     """
     base_url = await get_link_with_current_hash()
     if not base_url:
-        print(f"❌ Не могу получить данные групп c сайта, попробую ещё раз через час")
+        print(f"❌ Не могу получить данные групп, снова попробую через час")
         scheduler.add_job(form_correctslinksstep_two, 'date', run_date=datetime.now() + timedelta(minutes=60), kwargs={"stop": stop, "scheduler": scheduler})
         return
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:

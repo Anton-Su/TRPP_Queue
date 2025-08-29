@@ -1,18 +1,22 @@
 import sqlite3
 import os
 
+# from dotenv import load_dotenv
+#
+# load_dotenv()
 
 def create():
     """Создает базу данных SQLite и необходимые таблицы."""
     DB_NAME = os.getenv("DATABASE_NAME")
     if os.path.exists(DB_NAME):
         return False
+    print(f'Используется база данных с названием «{DB_NAME}»')
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Session (
     GroupName TEXT (14) PRIMARY KEY UNIQUE NOT NULL,
-    Url INTEGER (4) UNIQUE NOT NULL);
+    Url INTEGER (4) UNIQUE);
     ''')
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS All_groups (
@@ -49,6 +53,11 @@ def create():
     Location TEXT (81) NOT NULL,
     Id INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
     message_id INTEGER);
+    ''')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS GroupCreaters (
+    Id INTEGER NOT NULL,
+    GroupName TEXT (14) NOT NULL REFERENCES Session (GroupName));
     ''')
     conn.commit()
     conn.close()

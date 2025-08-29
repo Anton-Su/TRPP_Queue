@@ -2,7 +2,7 @@
 
 ## Description
 
-This project is designed to retrieve, process, and store class schedules for study groups. It downloads data from a remote source, parses it, and saves it to a database. Subsequently, a registered user can sign up for a specific class from the available upcoming dates, and at the appropriate time, they will be notified when their turn in the queue arrives. After that, they can confirm that they have "completed" their session, and the turn will pass to the next person who signed up from the same group.
+This project is designed to retrieve, process, and store class schedules for study groups. It downloads data from a remote source, parses it, and saves it to a database. Subsequently, a registered user can sign up for a specific class from the available upcoming dates, and at the appropriate time, they will be notified when their turn in the queue arrives. After that, they can confirm that they have "completed" their session, and the turn will pass to the next person who signed up from the same group. You can add yours independent groups.
 
 ## Dependencies
 

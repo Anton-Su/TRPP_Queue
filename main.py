@@ -20,6 +20,8 @@ import logging
 import asyncio
 
 
+limitGroupbyOne = 1  # Лимит групп на одного пользователя
+
 load_dotenv() # получаю значение токена из специального файла
 TOKEN = getenv("BOT_TOKEN")
 DATABASE_NAME = getenv("DATABASE_NAME")
@@ -443,7 +445,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
                         return await bot.leave_chat(chat_id)
                     return None
                 except TypeError:
-                    await bot.send_message(chat_id, "Прикалываешься? Юзер не зарегистрирован в системе.")
+                    await bot.send_message(chat_id, f"Прикалываешься, {event.from_user.full_name}? Ты не зарегистрирован в системе.")
                     return await bot.leave_chat(chat_id)
                 except ValidationError:
                     await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?", (chat_id, user_group))
@@ -529,6 +531,14 @@ async def command_start_handler(message: Message) -> None:
                     ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
                 """, (user_id,))
                 result = await cursor.fetchall()
+                await cursor.execute("SELECT GroupName FROM GroupCreaters WHERE Id = ?", (user_id,))
+                group_creates = await cursor.fetchall()
+    if group_creates:
+        text = ", ".join(f"«{row[0]}»" for row in group_creates)
+        await message.answer("👑 👑 👑 Создатель групп: " + text)
+    if not result:
+        await message.answer("На данный момент вы не записаны ни на одно занятие")
+        return
     results = []
     year = datetime.now().year
     count = False
@@ -546,10 +556,7 @@ async def command_start_handler(message: Message) -> None:
         else:
             results.append(
                 f"{index}. {actual_position} место в очереди, {start_time} - {end_time}\n"
-                f"«{subject}», проходит в «{location}». ЭТА ПАРА БЫЛА СОЗДАНА ВРУЧНУЮ")
-    if not result:
-        await message.answer("На данный момент вы не записаны ни на одно занятие")
-        return
+                f"«{subject}», проходит в «{location}». ЭТА ПАРА СОЗДАНА ИСКУСТВЕННО")
     if count:
         results.append("\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва")
     results.insert(0, f'Всего активных записей: {len(result)}')
@@ -608,9 +615,9 @@ async def command_start_handler(message: Message) -> None:
                     await bot.leave_chat(group_id)
                 await cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
                 await cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-                await message.answer(f"Юзер, довожу до вашего сведения: с вашим уходом группа «{group}» расформирована!")
+                await message.answer(f"{message.from_user.full_name}, с вашим уходом группа «{group}» временно расформирована! Для окончательного удаления группы «{group}» из бота, используйте /delete_group с аргументом название.")
             await conn.commit()
-    await message.answer("😢😢😢Очень жаль с вами расставаться, Юзер, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
+    await message.answer(f"😢😢😢Очень жаль с вами расставаться, {message.from_user.full_name}, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
 
 @dp.message(Command("start")) # Начальная команда
@@ -817,6 +824,7 @@ async def add_group(message: types.Message) -> Message:
     # и в Session сделать поле CreatorID, типа внешний ключ на GroupCreators, ха-ха-ха, кто это вообще читать будет?
     # да и вообще, кто будет создавать группы, если можно просто зарегистрироваться в уже существующей?
     # ладно, потом доделаю, когда будет время и желание
+    user_id = message.from_user.id
     parts = message.text.strip().split(maxsplit=1)
     if len(parts) != 2:
         return await message.answer("Вы не указали название группы. Используйте /add_group название_группы", reply_markup=kbnotregister)
@@ -824,11 +832,37 @@ async def add_group(message: types.Message) -> Message:
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         try:
             async with conn.cursor() as cursor:
-                await cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)", (nameGroup, "NOOOO"),)
-            await conn.commit()
+                await cursor.execute("SELECT COUNT(*) FROM GroupCreaters WHERE Id = ?", (user_id,))
+                count = (await cursor.fetchone())[0]
+                if count >= limitGroupbyOne:
+                   return await message.answer(f"Превышен лимит созданных групп. Используйте /delete_group название_группы!", reply_markup=kbnotregister)
+                await cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)", (nameGroup, None),)
+                await cursor.execute("INSERT INTO GroupCreaters (id, groupname) VALUES (?, ?)", (user_id, nameGroup),)
+                await conn.commit()
         except aiosqlite.IntegrityError:
             return await message.answer("Группа с таким названием уже существует", reply_markup=kbnotregister)
-    return await message.answer(f"Группа «{nameGroup}» создана!", reply_markup=kbnotregister)
+    return await message.answer(f"Группа «{nameGroup}» создана! Для удаления используйте /delete_group {nameGroup}", reply_markup=kbnotregister)
+
+
+@dp.message(Command("delete_group"))
+async def delete_group(message: types.Message) -> Message:
+    """Обрабатывает команду /delete_group название, удаляя группу юзера по запросу."""
+    user_id = message.from_user.id
+    parts = message.text.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return await message.answer("Вы не указали название группы. Используйте /delete_group название_группы", reply_markup=kbnotregister)
+    nameGroup = parts[1]
+    async with aiosqlite.connect(DATABASE_NAME) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1 FROM GroupCreaters WHERE Id = ? AND GroupName = ?", (user_id, nameGroup))
+            count = (await cursor.fetchone())
+            if count:
+                await cursor.execute("DELETE FROM GroupCreaters WHERE Id = ? AND GroupName = ?", (user_id, nameGroup))
+                await cursor.execute("DELETE FROM Session WHERE GroupName = ?", (nameGroup,))
+                await cursor.execute("DELETE FROM Users WHERE GroupName = ?", (nameGroup,))
+                await conn.commit()
+                return await message.answer(f"Группа «{nameGroup}» удалена!", reply_markup=kbnotregister)
+        return await message.answer(f"Отказано", reply_markup=kbnotregister)
 
 
 @dp.message(Command("add_pair"))
@@ -1005,7 +1039,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                 await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (user_data['group'],))
                 url_data = await cursor.fetchone()
                 url_data = str(url_data[0])
-                if url_data == "NOOOO":
+                if url_data == 'None':
                     await state.clear()
                     return await message.answer("✅ Регистрация в специальной группе завершена", reply_markup=kbregister)
                 current_hash = await get_link_with_current_hash()
