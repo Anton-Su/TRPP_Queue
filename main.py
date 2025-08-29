@@ -1088,7 +1088,7 @@ async def main_async() -> None: # Run the bot
     bd = create()
     await refresh_schedule()
     await delete_old_sessions()
-    await form_correctslinks(7000, scheduler, bot)
+    # if need insta new data await form_correctslinks(7000, scheduler, bot)
     if bd:
         await form_correctslinksstep_two(7000, scheduler)
     await generatescheduler_to_currect_day() # начальные три действия
