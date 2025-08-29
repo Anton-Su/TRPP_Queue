@@ -54,6 +54,7 @@ async def form_correctslinks(stop, scheduler, bot):
             await cursor.execute("DELETE FROM Ochered;")
             await cursor.execute("DELETE FROM All_groups;")
             await cursor.execute("DELETE FROM Timetable;")
+            await cursor.execute("DELETE FROM GroupCreaters;")
             await conn.commit()
     return await form_correctslinksstep_two(stop, scheduler)
 
