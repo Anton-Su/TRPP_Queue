@@ -829,15 +829,15 @@ async def add_group(message: types.Message) -> Message:
     user_id = message.from_user.id
     parts = message.text.strip().split(maxsplit=1)
     if len(parts) != 2:
-        return await message.answer("Вы не указали название группы. Используйте /add_group название_группы", reply_markup=kbnotregister)
-    nameGroup = parts[1].upper()
+        return await message.answer("Вы не указали название группы. Используйте /add_group название-группы", reply_markup=kbnotregister)
+    nameGroup = parts[1].upper().replace("_", "-")
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         try:
             async with conn.cursor() as cursor:
                 await cursor.execute("SELECT COUNT(*) FROM GroupCreaters WHERE Id = ?", (user_id,))
                 count = (await cursor.fetchone())[0]
                 if count >= limitGroupbyOne:
-                   return await message.answer(f"Превышен лимит созданных групп. Используйте /delete_group название_группы!", reply_markup=kbnotregister)
+                   return await message.answer(f"Превышен лимит созданных групп. Используйте /delete_group название-группы!", reply_markup=kbnotregister)
                 await cursor.execute("INSERT INTO Session (GroupName, Url) VALUES (?, ?)", (nameGroup, None),)
                 await cursor.execute("INSERT INTO GroupCreaters (id, groupname) VALUES (?, ?)", (user_id, nameGroup),)
                 await conn.commit()
@@ -852,7 +852,7 @@ async def delete_group(message: types.Message) -> Message:
     user_id = message.from_user.id
     parts = message.text.strip().split(maxsplit=1)
     if len(parts) != 2:
-        return await message.answer("Вы не указали название группы. Используйте /delete_group название_группы", reply_markup=kbnotregister)
+        return await message.answer("Вы не указали название группы. Используйте /delete_group название-группы", reply_markup=kbnotregister)
     nameGroup = parts[1].upper()
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
@@ -934,7 +934,7 @@ async def process_title(message: types.Message, state: FSMContext):
     """
     Обрабатывает ввод названия добавленного занятия.
     """
-    await state.update_data(title=message.text.capitalize())
+    await state.update_data(title=message.text.capitalize()[:14].replace("_", "-"))
     await message.answer("Введите место проведения пары")
     await state.set_state(AddState.location)
 
@@ -946,7 +946,7 @@ async def process_location(message: types.Message, state: FSMContext):
     - Если в группе пользователя нет пересечений занятий, добавляет новое занятие в базу данных
     - Добавляет временные слоты (если раньше слотов с таким id не было)
     """
-    await state.update_data(location=message.text.strip()[:14])
+    await state.update_data(location=message.text.strip()[:14].replace("_", "-"))
     data = await state.get_data()
     groupname, title = data['groupname'], data['title']
     location, start_date, end_date = data['location'], data['start'], data['end']
