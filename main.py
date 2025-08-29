@@ -1008,17 +1008,18 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                 url_data = await cursor.fetchone()
                 url_data = str(url_data[0])
                 if url_data == "NOOOO":
-                    return
+                    await state.clear()
+                    return await message.answer("✅ Регистрация в специальной группе завершена", reply_markup=kbregister)
                 current_hash = await get_link_with_current_hash()
                 if not current_hash:
                     await message.answer("✅ Регистрация завершена, группа создана, но сайт миреа точка ру не отвечает, расписание не подгружено "
                                          "(maybe, bot hosts not in Russia?)", reply_markup=kbregister)
-                    return
+                    return await state.clear()
                 url = current_hash + url_data
                 await get_schedule(url, user_data['group'])
                 await generatescheduler_to_currect_day()
     await message.answer("✅ Регистрация завершена!", reply_markup=kbregister)
-    await state.clear()
+    return await state.clear()
 
 
 async def main_async() -> None: # Run the bot
