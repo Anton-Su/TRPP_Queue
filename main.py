@@ -439,7 +439,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
                     existing_chat_id = (await cursor.fetchone())[0]
                     await bot.get_chat(existing_chat_id)
                     if existing_chat_id != chat_id:
-                        await bot.send_message(chat_id, f"{user_group} уже привязан к другой группе.")
+                        await bot.send_message(chat_id, f"«{user_group}» уже привязан к другой группе.")
                         return await bot.leave_chat(chat_id)
                     return None
                 except TypeError:
@@ -448,7 +448,7 @@ async def on_bot_added_or_delete_to_group(event: ChatMemberUpdated):
                 except ValidationError:
                     await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = NULL WHERE GroupName = ?", (chat_id, user_group))
                     await conn.commit()
-                    return await bot.send_message(chat_id, f"Теперь бот привязан к группе {user_group}.")
+                    return await bot.send_message(chat_id, f"Теперь бот привязан к группе «{user_group}».")
             elif event.new_chat_member.status in ("kicked", "left"):
                 await cursor.execute("UPDATE All_groups SET group_id = NULL, thread_id = NULL WHERE group_id = ?", (chat_id,))
                 await conn.commit()
@@ -475,7 +475,7 @@ async def link(message: Message):
                 if message.chat.id == chat_id:
                     await cursor.execute("UPDATE All_groups SET group_id = ?, thread_id = ? WHERE GroupName = ?", (chat_id, thread_id, user_group))
                     await conn.commit()
-                    return await message.answer(f"Теперь бот привязан к этому топику группы {user_group}.")
+                    return await message.answer(f"Теперь бот привязан к этому топику группы «{user_group}».")
             except TypeError:
                 return await message.answer("Вы не зарегистрированы.", reply_markup=kbnotregister)
 
