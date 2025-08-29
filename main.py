@@ -1,7 +1,7 @@
 from datetime import datetime
 from os import getenv
 import re
-from aiogram.types import ChatMemberUpdated, Message
+from aiogram.types import ChatMemberUpdated
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -763,9 +763,7 @@ async def handle_subject_uni(user_id: int, groupname: str, month: str, day: str,
 
 @dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
 async def handle_subject(callback: CallbackQuery):
-    """
-    call-back запрос
-    """
+    """call-back запрос для обработки выбора предмета."""
     _, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
     message = await handle_subject_uni(user_id, groupname, month, day, hour, minute, location)
