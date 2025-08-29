@@ -1,8 +1,6 @@
 from datetime import datetime
 from os import getenv
 import re
-from typing import Any, Coroutine
-
 from aiogram.types import ChatMemberUpdated, Message
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
