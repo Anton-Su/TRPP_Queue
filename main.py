@@ -1081,7 +1081,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                 current_hash = await get_link_with_current_hash()
                 if not current_hash:
                     await message.answer("✅ Регистрация завершена, группа создана, но сайт миреа точка ру не отвечает, расписание не подгружено "
-                                         "(maybe, bot hosts not in Russia?)", reply_markup=kbregister)
+                                         "(maybe, bot hosts not in Russia?). В случае необходимости можно вручную использовать /sync", reply_markup=kbregister)
                     return await state.clear()
                 url = current_hash + url_data
                 await get_schedule(url, user_data['group'])
