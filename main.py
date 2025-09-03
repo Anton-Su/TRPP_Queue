@@ -624,7 +624,7 @@ async def command_start_handler(message: Message) -> None:
                     await bot.leave_chat(group_id)
                 await cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
                 await cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-                await message.answer(f"{message.from_user.full_name}, с вашим уходом группа «{group}» временно расформирована! Для окончательного удаления группы «{group}» из бота, используйте /delete_group с аргументом название.")
+                await message.answer(f"{message.from_user.full_name}, с вашим уходом группа «{group}» временно расформирована! Для окончательного удаления группы «{group}» из бота, используйте /delete_group {group}.")
             await conn.commit()
     await message.answer(f"😢😢😢Очень жаль с вами расставаться, {message.from_user.full_name}, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
