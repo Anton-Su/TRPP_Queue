@@ -1031,7 +1031,7 @@ async def process_group(message: types.Message, state: FSMContext):
             await cursor.execute("SELECT 1 FROM Session WHERE GroupName = ?", (message.text.upper(),))
             group_exist = await cursor.fetchone()
     if not group_exist:
-        await message.answer("⚠ Ошибка: Такой группы не существует. Попробуйте еще раз.", reply_markup=kbnotregister)
+        await message.answer(f"⚠ Ошибка: группы «{message.text}» не существует, проверьте корректность шифра (дефисы тоже считаются). Также можно создать пользовательскую группу с помощью /add_group название (но расписание не будет автоматически добавляться). ", reply_markup=kbnotregister)
         return
     await message.answer("Введите ваше имя:")
     await state.set_state(RegisterState.name)
