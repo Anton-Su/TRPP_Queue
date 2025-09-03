@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from validation import form_correctslinks, get_link_with_current_hash, form_correctslinksstep_two
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest
 from schedule import refresh_schedule, get_schedule, sync
 from createdb import create
 import aiosqlite
@@ -237,6 +237,7 @@ async def query_handler_pass(call: CallbackQuery):
             # Получение данных о занятии
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?", (_class_id,))
             _class_data = (await cursor.fetchall())[0]
+            # print(call.message.chat.id, call.message.message_id, 1)
             await handle_subject_uni(call.from_user.id, _class_data[5], _class_data[0], _class_data[1], _class_data[2], _class_data[3], _class_data[4])
             await triggerlistupdate(call.message.chat.id, call.message.message_id, 1)
     await bot.send_message(chat_id=call.from_user.id, text="Надеюсь, реально сдал", reply_markup=kbregister)
@@ -263,6 +264,7 @@ async def query_handler_reg(call: CallbackQuery):
             await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
                                  "WHERE Id = ?", (_class_id,))
             _class_data = (await cursor.fetchall())[0]
+            #print(call.message.chat.id, call.message.message_id, call.from_user.id)
             result = await handle_subject_uni(call.from_user.id, _class_data[5], _class_data[0], _class_data[1], _class_data[2], _class_data[3], _class_data[4])
             await triggerlistupdate(call.message.chat.id, call.message.message_id, call.from_user.id)
     return await call.answer(result)
@@ -330,12 +332,17 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
                 await cursor.execute("SELECT id FROM Ochered WHERE Numseance = ? limit 1", (_,))
                 last_people = await cursor.fetchone()
                 if last_people is not None:
-                    await bot.send_message(last_people[0], "Пара закончилась", reply_markup=kbregister)
+                    await cursor.execute("SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Task from Timetable WHERE Id = ?", (_,))
+                    info = (await cursor.fetchone())
+                    await bot.send_message(last_people[0], f"Пара «{info[4]}» ({str(info[0]).rjust(2, '0')}.{str(info[1]).rjust(2, '0')} {str(info[2]).rjust(2, '0')}:{str(info[3]).rjust(2, '0')}) закончилась", reply_markup=kbregister)
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (_,))
                 await cursor.execute("SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,))
                 chat_id = await cursor.fetchone()
                 if chat_id and message_id:
-                    await bot.delete_message(chat_id[0], message_id)
+                    try:
+                        await bot.delete_message(chat_id[0], message_id)
+                    except TelegramBadRequest:
+                        print(f'{chat_id[0]} - {message_id} (не удалось удалить)')  # игнорируем ошибку
             await cursor.execute("DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
                                  (month, date, hour, minute))
             await conn.commit()
@@ -749,24 +756,49 @@ async def handle_subject_uni(user_id: int, groupname: str, month: str, day: str,
     - Если записан, удаляет его из очереди.
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
+    print(user_id, groupname, month, day, hour, minute, location)
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
                 "AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",
                 (groupname, month, day, hour, minute, location))
             numseance = (await cursor.fetchone())[0]
-            await cursor.execute("SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?", (numseance,))
-            result = await cursor.fetchone()
-            new_poryadok = (result[0] + 1) if result[0] is not None else 1
+
+
+
+
+
             await cursor.execute("SELECT 1 FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
-            if await cursor.fetchone():
+            cancel = await cursor.fetchone()
+            if cancel:
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ? AND Id = ?", (numseance, user_id))
                 await conn.commit()
                 return "Запись отменена!"
+                print(11111111111)
+            #
+            #
+            # await cursor.execute("SELECT group_id, thread_id FROM All_groups Where GroupName = ?", (groupname,))
+            # chat_id_thread = (await cursor.fetchall())[0]
+            # if chat_id_thread[0] is not None:
+            #     await cursor.execute("SELECT message_id from Timetable WHERE Id = ?", (numseance,))
+            #     if msg := await cursor.fetchone():
+            #         print(chat_id_thread[0], msg[0], user_id)
+            #         await triggerlistupdate(chat_id_thread[0], msg[0], user_id)
+            # print(1231313)
+
+            # if cancel:
+            #     return "Запись отменена!"
+
+            await cursor.execute("SELECT MAX(Poryadok) FROM Ochered WHERE numseance = ?", (numseance,))
+            result = await cursor.fetchone()
+            new_poryadok = (result[0] + 1) if result[0] is not None else 1
             await cursor.execute("INSERT INTO Ochered (Numseance, Id, Poryadok) VALUES (?, ?, ?)", (numseance, user_id, new_poryadok))
             await conn.commit()
             await cursor.execute("SELECT COUNT(*) FROM Ochered WHERE Numseance = ?", (numseance,))
             queue_position = (await cursor.fetchone())[0]
+            current_time = datetime.now()
+            if queue_position == 1 and current_time >= datetime(current_time.year, int(month), int(day), int(hour), int(minute)):
+                await lighttriggerlistupdate(numseance)
             return f"Успешно! Ваш номер в очереди: {queue_position}"
 
 
