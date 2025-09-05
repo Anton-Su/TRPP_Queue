@@ -63,7 +63,7 @@ Additionally, the following built-in libraries are used:
    pip install -r requirements.txt
    ```
 
-5. Look at the queue.db file. It contains data that are relevant until summer 2025. So if you are from the future, I recommend you in step 7 not to chose queue.db (or just delete it) - instead you will auto create an SQLite database file. After 1 hour (time that require to collect data in mirea.ru in the first setup) or something, the bot starts working (step 9).
+5. Look at the queue.db file. It contains data that are relevant until winter 2026. So if you are from the future, I recommend you in step 7 not to chose queue.db (or just delete it) - instead you will auto create an SQLite database file. After 1 hour (time that require to collect data in mirea.ru in the first setup) or something, the bot starts working (step 9).
 
 6. Create a bot on Telegram by talking to the [BotFather](https://t.me/botfather) and get your bot token. Follow the instructions provided by BotFather to create a new bot and obtain the token.
 
