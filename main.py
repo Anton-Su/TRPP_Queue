@@ -624,7 +624,7 @@ async def command_start_handler(message: Message) -> None:
                     await bot.leave_chat(group_id)
                 await cursor.execute("DELETE FROM All_groups WHERE GroupName = ?", (group,))
                 await cursor.execute("DELETE FROM Timetable WHERE GroupName = ?", (group,))
-                await message.answer(f"{message.from_user.full_name}, с вашим уходом группа «{group}» временно расформирована! Для окончательного удаления группы «{group}» из бота, используйте /delete_group {group}.")
+                await message.answer(f"{message.from_user.full_name}, с вашим уходом группа «{group}» временно расформирована! Для окончательного удаления группы «{group}» из бота (если вы её создатель), используйте /delete_group {group}.")
             await conn.commit()
     await message.answer(f"😢😢😢Очень жаль с вами расставаться, {message.from_user.full_name}, возвращайтесь поскорее!!!!!", reply_markup=kbnotregister)
 
@@ -835,7 +835,7 @@ async def register(message: types.Message, state: FSMContext):
 
 @dp.message(Command("sync"))
 @dp.message(lambda message: message.text == "Обновить")
-async def new_register(message: types.Message) -> None:
+async def update(message: types.Message) -> None:
     """Обрабатывает команду /sync, обновляя расписание группы юзера по запросу."""
     user_id = message.from_user.id
     async with aiosqlite.connect(DATABASE_NAME) as conn:
@@ -1086,7 +1086,7 @@ async def process_middle_name(message: types.Message, state: FSMContext):
                 url = current_hash + url_data
                 await get_schedule(url, user_data['group'])
                 await generatescheduler_to_currect_day()
-    await message.answer("✅ Регистрация завершена!", reply_markup=kbregister)
+    await message.answer("✅ Регистрация завершена! Попробуйте функционал!", reply_markup=kbregister)
     return await state.clear()
 
 
