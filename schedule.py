@@ -1,12 +1,14 @@
+from datetime import datetime, timedelta
+from os import getenv
 import aiohttp
 from icalendar import Calendar
 import aiosqlite
-from os import getenv
-from datetime import datetime, timedelta
 from validation import get_link_with_current_hash
 
 
-peremen_minutes = 10  # время перемены, которое нужно добавить к времени занятия (в минутах)
+peremen_minutes = (
+    10  # время перемены, которое нужно добавить к времени занятия (в минутах)
+)
 
 
 async def refresh_schedule():  # обновить расписание
@@ -24,10 +26,14 @@ async def refresh_schedule():  # обновить расписание
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT GroupName FROM All_groups")
-            groups = await cursor.fetchall()  # Получаем все строки в виде списка кортежей
+            groups = (
+                await cursor.fetchall()
+            )  # Получаем все строки в виде списка кортежей
             for group in groups:
                 group_name = group[0]
-                await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,))
+                await cursor.execute(
+                    "SELECT Url FROM Session WHERE GroupName = ?", (group_name,)
+                )
                 group_number = (await cursor.fetchone())[0]
                 if group_number is None:
                     continue
@@ -45,7 +51,9 @@ async def sync(group_name):  # обновить расписание по зап
     """
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT Url FROM Session WHERE GroupName = ?", (group_name,))
+            await cursor.execute(
+                "SELECT Url FROM Session WHERE GroupName = ?", (group_name,)
+            )
             group_number = (await cursor.fetchone())[0]
             if group_number is not None:
                 currect_hash = await get_link_with_current_hash()
@@ -61,7 +69,9 @@ async def get_schedule(url, groupname):
     """
     async with aiohttp.ClientSession() as session:
         try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     schedule_info = data["pageProps"]["scheduleLoadInfo"]
@@ -70,21 +80,42 @@ async def get_schedule(url, groupname):
                         schedule = schedule_info["iCalContent"]
                         realschedule = Calendar.from_ical(schedule)
                         for component in realschedule.walk():
-                            if (component.name == "VEVENT" and str(component.get('description'))
-                                    and len(str(component.get('description')).split('\n')) == 2):
-                                teacher_fio = str(component.get('description')).split('\n')[0].replace('Преподаватель: ', '')
-                                dtstart = component.get('dtstart').dt
-                                dtend = component.get('dtend').dt
-                                summary = component.get('summary').replace('ПР ', "", 1)
-                                location = component.get('location').strip('Дистанционно ')
+                            if (
+                                component.name == "VEVENT"
+                                and str(component.get("description"))
+                                and len(str(component.get("description")).split("\n"))
+                                == 2
+                            ):
+                                teacher_fio = (
+                                    str(component.get("description"))
+                                    .split("\n", maxsplit=1)[0]
+                                    .replace("Преподаватель: ", "")
+                                )
+                                dtstart = component.get("dtstart").dt
+                                dtend = component.get("dtend").dt
+                                summary = component.get("summary").replace("ПР ", "", 1)
+                                location = component.get("location").strip(
+                                    "Дистанционно "
+                                )
                                 try:
-                                    exdate = component.get('exdate').dts
-                                    exd = [i.dt.replace(tzinfo=None) for i in exdate] # список datetime исключений
-                                    await generate_schedule(dtstart.replace(tzinfo=None), dtend.replace(tzinfo=None),
-                                                            summary, teacher_fio, location, groupname, exd)
+                                    exdate = component.get("exdate").dts
+                                    exd = [
+                                        i.dt.replace(tzinfo=None) for i in exdate
+                                    ]  # список datetime исключений
+                                    await generate_schedule(
+                                        dtstart.replace(tzinfo=None),
+                                        dtend.replace(tzinfo=None),
+                                        summary,
+                                        teacher_fio,
+                                        location,
+                                        groupname,
+                                        exd,
+                                    )
                                 except AttributeError:
                                     # сессия, детка
-                                    async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
+                                    async with aiosqlite.connect(
+                                        getenv("DATABASE_NAME")
+                                    ) as conn:
                                         async with conn.cursor() as cursor:
                                             start_date = dtstart.replace(tzinfo=None)
                                             end_date = dtend.replace(tzinfo=None)
@@ -92,21 +123,42 @@ async def get_schedule(url, groupname):
                                             #     summary = summary.replace("З", "ЗАЧ")
                                             if summary.startswith("Э"):
                                                 summary = summary.replace("Э", "ЭКЗ")
-                                            await cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ?
+                                            await cursor.execute(
+                                                """SELECT 1 FROM TIMETABLE WHERE GroupName = ?
                                                                  AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ?
-                                                                 AND Start_Minute = ? AND LOCATION = ?""", (
-                                            groupname, teacher_fio, summary, start_date.month, start_date.day,
-                                            start_date.hour, start_date.minute, location))
+                                                                 AND Start_Minute = ? AND LOCATION = ?""",
+                                                (
+                                                    groupname,
+                                                    teacher_fio,
+                                                    summary,
+                                                    start_date.month,
+                                                    start_date.day,
+                                                    start_date.hour,
+                                                    start_date.minute,
+                                                    location,
+                                                ),
+                                            )
                                             exists = await cursor.fetchone()
                                             if not exists:
-                                                await cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task,
+                                                await cursor.execute(
+                                                    """INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task,
                                                                     Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location)
                                                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                                                                     (groupname, teacher_fio, summary, start_date.month,
-                                                                      start_date.day,
-                                                                      start_date.hour, start_date.minute,
-                                                                      end_date.month, end_date.day,
-                                                                      end_date.hour, end_date.minute, location))
+                                                    (
+                                                        groupname,
+                                                        teacher_fio,
+                                                        summary,
+                                                        start_date.month,
+                                                        start_date.day,
+                                                        start_date.hour,
+                                                        start_date.minute,
+                                                        end_date.month,
+                                                        end_date.day,
+                                                        end_date.hour,
+                                                        end_date.minute,
+                                                        location,
+                                                    ),
+                                                )
                                                 await conn.commit()
                 else:
                     print(f"⚠ Ошибка {response.status} для {url}")
@@ -114,7 +166,9 @@ async def get_schedule(url, groupname):
             print(f"⚠ Ошибка при обработке {url}: {e}")
 
 
-async def generate_schedule(start_date, end_date, description, teacher, location, groupname, exdate):  # Генерируем расписание на ближайшие две недели
+async def generate_schedule(
+    start_date, end_date, description, teacher, location, groupname, exdate
+):  # Генерируем расписание на ближайшие две недели
     """
     Генерирует расписание для указанной группы на ближайшие две недели.
     Эта функция выполняет следующие шаги:
@@ -139,23 +193,48 @@ async def generate_schedule(start_date, end_date, description, teacher, location
             end_of_semester = datetime(current_date.year + 1, 2, 4)
         else:
             end_of_semester = datetime(current_date.year, 2, 4)
-    #print(end_of_semester)
+    # print(end_of_semester)
     end_date += timedelta(minutes=peremen_minutes)
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
             while start_date <= end_of_semester:
                 if current_date <= start_date:
-                    await cursor.execute("""SELECT 1 FROM TIMETABLE WHERE GroupName = ?
+                    await cursor.execute(
+                        """SELECT 1 FROM TIMETABLE WHERE GroupName = ?
                      AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? 
-                     AND Start_Minute = ? AND LOCATION = ?""", (groupname, teacher, description, start_date.month, start_date.day, start_date.hour, start_date.minute, location))
+                     AND Start_Minute = ? AND LOCATION = ?""",
+                        (
+                            groupname,
+                            teacher,
+                            description,
+                            start_date.month,
+                            start_date.day,
+                            start_date.hour,
+                            start_date.minute,
+                            location,
+                        ),
+                    )
                     exists = await cursor.fetchone()
                     if not exists and start_date not in exdate:
-                        await cursor.execute("""INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, 
+                        await cursor.execute(
+                            """INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, 
                         Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                                             (groupname, teacher, description, start_date.month, start_date.day,
-                                              start_date.hour, start_date.minute, end_date.month, end_date.day,
-                                              end_date.hour, end_date.minute, location))
+                            (
+                                groupname,
+                                teacher,
+                                description,
+                                start_date.month,
+                                start_date.day,
+                                start_date.hour,
+                                start_date.minute,
+                                end_date.month,
+                                end_date.day,
+                                end_date.hour,
+                                end_date.minute,
+                                location,
+                            ),
+                        )
                         await conn.commit()
                     break
                 # Добавляем 2 недели (интервал)
