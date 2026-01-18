@@ -885,25 +885,21 @@ async def statistic(message: Message) -> None:
         # Форматирование даты и времени
         start_time = f"{str(start_hour).rjust(2, '0')}:{str(start_minute).rjust(2, '0')}"
         end_time = f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}"
-        month_year_date = f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{start_year}"
+        duration = f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{start_year}\n{start_time} - {end_time}"
         if teacherfio != "Someone":
             results.append(
-                f"{index}) "
-                f"{month_year_date} -> "
-                f"{actual_position} место в очереди, {start_time} - {end_time}*\n"
-                f"«{subject}», проходит в «{location}», ведёт {teacherfio}"
+                f"{index}) «{subject}», проходит в «{location}», ведёт {teacherfio} {duration}\n"
+                f"{actual_position} место в очереди.\n"
             )
             count = True
         else:
             results.append(
-                f"{index}) "
-                f"{month_year_date} -> "
-                f"{actual_position} место в очереди, {start_time} - {end_time}\n"
-                f"«{subject}», проходит в «{location}». ЭТА ПАРА СОЗДАНА ИСКУСТВЕННО."
+                f"{index}) «{subject}», проходит в «{location}» {duration}\n"
+                f"{actual_position} место в очереди.\n"
             )
     if count:
         results.append(
-            "\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва"
+            "\n*Длительность занятия увеличена на 10 минут, чтобы учесть время перерыва."
         )
     results.insert(0, f"Всего активных записей: {len(result)}")
     await message.answer("\n".join(results))
