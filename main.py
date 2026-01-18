@@ -237,7 +237,7 @@ async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
                 message_id=message_id,
                 reply_markup=keyboard,
                 parse_mode="MarkdownV2",
-                text=f"У {escape_md(_class[1])} началось занятие: {escape_md(_class[2])}\n\nОчередь:\n{queue_text}",
+                text=f"Началось занятие «{escape_md(_class[2])}»!\n\nОчередь:\n{queue_text}",
             )
             if __people and (personality_id == 1 or __people[0][3] == personality_id):
                 await bot.send_message(
