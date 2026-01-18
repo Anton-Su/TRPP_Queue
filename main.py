@@ -197,7 +197,7 @@ async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="Записаться",
+                            text="За(от)писаться",
                             callback_data=f"query_handler_reg_{_class[0]}",
                         ),
                         InlineKeyboardButton(
@@ -544,13 +544,13 @@ async def dandalan(year: int, month: int, date: int, hour: int, minute: int):
                 last_people = await cursor.fetchone()
                 if last_people is not None:
                     await cursor.execute(
-                        "SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Task from Timetable WHERE Id = ?",
+                        "SELECT Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, Task from Timetable WHERE Id = ?",
                         (_,),
                     )
                     info = await cursor.fetchone()
                     await bot.send_message(
                         last_people[0],
-                        f"Пара «{info[4]}» ({str(info[0]).rjust(2, '0')}.{str(info[1]).rjust(2, '0')} {str(info[2]).rjust(2, '0')}:{str(info[3]).rjust(2, '0')}) закончилась",
+                        f"Пара «{info[5]}» ({str(info[1]).rjust(2, '0')}.{str(info[2]).rjust(2, '0')} {str(info[3]).rjust(2, '0')}:{str(info[4]).rjust(2, '0')}) закончилась",
                         reply_markup=kbregister,
                     )
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (_,))
@@ -572,12 +572,12 @@ async def dandalan(year: int, month: int, date: int, hour: int, minute: int):
             await conn.commit()
 
 
-async def delete_old_sessions():  # удалить просроченное (на случай перезапуска с уже норм составленным расписанием)
+async def delete_old_sessions():
     """
     Удаляет просроченные записи из базы данных (время сеансов раньше текущего момента).
     Эта функция выполняет проверку всех записей в таблице `Timetable` и удаляет те, которые уже прошли по сравнению с текущим временем.
     Просроченные записи удаляются из таблиц `Timetable` и `Ochered`.
-    - Вызывает функцию dandalan
+    - Вызывает функцию dindin, если занятие ещё не окончено (создаёт таблицу)
     """
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
@@ -589,15 +589,15 @@ async def delete_old_sessions():  # удалить просроченное (н�
                 current_date.month,
                 current_date.year,
             )
-            # Получаем пары, которые уже начались
+            # Получаем пары, которые уже минимум начались
             await cursor.execute(
-                """SELECT DISTINCT END_Year, End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
+                """SELECT DISTINCT Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, End_Year, End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
                 WHERE 
-                (END_Year < ?) OR 
-                    (END_Year = ? AND End_Month < ?) OR 
-                    (END_Year = ? AND End_Month = ? AND End_Day < ?) OR 
-                    (END_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour < ?) OR 
-                    (END_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
+                (Start_Year < ?) OR 
+                    (Start_Year = ? AND Start_Month < ?) OR 
+                    (Start_Year = ? AND Start_Month = ? AND Start_Day < ?) OR 
+                    (Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR 
+                    (Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?)
                 """,
                 (
                     year,
@@ -608,18 +608,16 @@ async def delete_old_sessions():  # удалить просроченное (н�
                 ),
             )
             result = await cursor.fetchall()
-            for end_year, end_month, end_day, end_hour, end_minute in result:
+            for start_year, start_month, start_day, start_hour, start_minute, end_year, end_month, end_day, end_hour, end_minute in result:
                 end_datetime = datetime(
                     end_year, end_month, end_day, end_hour, end_minute
                 )
+                # пара уже прошла вся
                 if current_date >= end_datetime:
                     await dandalan(end_year, end_month, end_day, end_hour, end_minute)
                 else:
-                    add_job_if_not_exists(
-                        f"end_{end_year:02d}_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}",
-                        dandalan,
-                        end_datetime,
-                    )
+                    await dindin(start_year, start_month, start_day, start_hour, start_minute)
+
 
 
 def generate_calendar(raspisanie):  # Функция для генерации клавиатуры-календаря
@@ -675,6 +673,7 @@ async def generatescheduler_to_currect_day():  # установка будиль
                 (current_date.year, current_date.month, current_date.day),
             )
             end_hour_minute = await cursor.fetchall()
+
     for start_hour, start_minute in start_hour_minute:
         start_date = datetime(
             current_date.year,
@@ -839,7 +838,7 @@ async def statistic(message: Message) -> None:
         async with conn.cursor() as cursor:
             await cursor.execute(
                 """
-                    SELECT T.Task, T.TeacherFIO, T.Start_Month, 
+                    SELECT T.Task, T.TeacherFIO, T.Start_Year, T.Start_Month, 
                         T.Start_Day, T.Start_Hour, T.Start_Minute, 
                         T.End_Hour, T.End_Minute, T.Location,
                         (
@@ -851,7 +850,7 @@ async def statistic(message: Message) -> None:
                     FROM Timetable T
                     JOIN Ochered O ON T.Id = O.Numseance
                     WHERE O.Id = ?
-                    ORDER BY T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
+                    ORDER BY T.Start_Year, T.Start_Month, T.Start_Day, T.Start_Hour, T.Start_Minute
                 """,
                 (user_id,),
             )
@@ -869,11 +868,11 @@ async def statistic(message: Message) -> None:
         )
         return
     results = []
-    year = datetime.now().year
     count = False
     for index, (
         subject,
         teacherfio,
+        start_year,
         start_month,
         start_date,
         start_hour,
@@ -884,20 +883,22 @@ async def statistic(message: Message) -> None:
         actual_position,
     ) in enumerate(result, start=1):
         # Форматирование даты и времени
-        start_time = (
-            f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{year} "
-            f"{str(start_hour).rjust(2, '0')}:{str(start_minute).rjust(2, '0')}"
-        )
+        start_time = f"{str(start_hour).rjust(2, '0')}:{str(start_minute).rjust(2, '0')}"
         end_time = f"{str(end_hour).rjust(2, '0')}:{str(end_minute).rjust(2, '0')}"
+        month_year_date = f"{str(start_date).rjust(2, '0')}.{str(start_month).rjust(2, '0')}.{start_year}"
         if teacherfio != "Someone":
             results.append(
-                f"{index}. {actual_position} место в очереди, {start_time} - {end_time}*\n"
+                f"{index}) "
+                f"{month_year_date} -> "
+                f"{actual_position} место в очереди, {start_time} - {end_time}*\n"
                 f"«{subject}», проходит в «{location}», ведёт {teacherfio}"
             )
             count = True
         else:
             results.append(
-                f"{index}. {actual_position} место в очереди, {start_time} - {end_time}\n"
+                f"{index}) "
+                f"{month_year_date} -> "
+                f"{actual_position} место в очереди, {start_time} - {end_time}\n"
                 f"«{subject}», проходит в «{location}». ЭТА ПАРА СОЗДАНА ИСКУСТВЕННО."
             )
     if count:
@@ -1163,7 +1164,6 @@ async def handle_subject_uni(
     - Если записан, удаляет его из очереди.
     - Если не записан, добавляет его в очередь с новым порядковым номером.
     """
-    print(user_id, groupname, month, day, hour, minute, location)
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
