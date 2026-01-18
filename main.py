@@ -1688,7 +1688,7 @@ async def main_async() -> None:  # Run the bot
     bd = create()
     await refresh_schedule()
     await delete_old_sessions()
-    await form_correctslinks(depth_search, scheduler, bot) # для моментального перезапуска всего
+    #await form_correctslinks(depth_search, scheduler, bot) # для моментального перезапуска всего
     if bd:
         await form_correctslinksstep_two(depth_search, scheduler)
     await generatescheduler_to_currect_day()  # начальные три действия
