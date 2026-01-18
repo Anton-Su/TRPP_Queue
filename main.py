@@ -31,10 +31,7 @@ from validation import (
 )
 from schedule import refresh_schedule, get_schedule, sync
 from createdb import create
-
-from datetime import timedelta
 from sys import argv
-from time import time
 
 # import psutil as psu
 # from memory_profiler import profile
@@ -142,7 +139,6 @@ class RegisterState(StatesGroup):
     - surname: Ввод фамилии пользователя.
     - middle_name: Ввод отчества пользователя.
     """
-
     group = State()
     name = State()
     surname = State()
@@ -166,6 +162,8 @@ class AddState(StatesGroup):
     title = State()
     location = State()
 
+
+#TODO: LIGHTTRIGGERLISTUPDATE INTEGRATE WITH REGULAR LISTUPDATE
 
 async def lighttriggerlistupdate(id_zanyatia: int):
     """Определяет, как реагировать: в личке (урез. версия), или в группе."""
@@ -539,20 +537,21 @@ async def dandalan(year: int, month: int, date: int, hour: int, minute: int):
             _class = await cursor.fetchall()
             for group_name, _, message_id in _class:
                 await cursor.execute(
-                    "SELECT id FROM Ochered WHERE Numseance = ? limit 1", (_,)
+                    "SELECT id FROM Ochered WHERE Numseance = ?", (_,)
                 )
-                last_people = await cursor.fetchone()
-                if last_people is not None:
+                last_peoples = await cursor.fetchall()
+                if last_peoples is not None:
                     await cursor.execute(
                         "SELECT Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, Task from Timetable WHERE Id = ?",
                         (_,),
                     )
                     info = await cursor.fetchone()
-                    await bot.send_message(
-                        last_people[0],
-                        f"Пара «{info[5]}» ({str(info[1]).rjust(2, '0')}.{str(info[2]).rjust(2, '0')} {str(info[3]).rjust(2, '0')}:{str(info[4]).rjust(2, '0')}) закончилась",
-                        reply_markup=kbregister,
-                    )
+                    for last_people in last_peoples:
+                        await bot.send_message(
+                            last_people[0],
+                            f"Пара «{info[5]}» ({str(info[1]).rjust(2, '0')}.{str(info[2]).rjust(2, '0')}.{info[0]} {str(info[3]).rjust(2, '0')}:{str(info[4]).rjust(2, '0')}) закончилась... вы не успели (грустная эмодзи, тут даже фрирен не поможет)",
+                            reply_markup=kbregister,
+                        )
                 await cursor.execute("DELETE FROM Ochered WHERE Numseance = ?", (_,))
                 await cursor.execute(
                     "SELECT group_id FROM All_groups WHERE GroupName = ?", (group_name,)
