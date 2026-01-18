@@ -32,6 +32,7 @@ async def get_link_with_current_hash():
 
 
 async def form_correctslinks(stop, scheduler, bot):
+    print("Процесс удаления соединений запущен")
     """
     Очищает базу данных (асинхронная версия с aiosqlite).
     Функция выполняет следующие действия:
@@ -73,6 +74,7 @@ async def form_correctslinksstep_two(stop, scheduler):
     3. Если расписание содержит более 5 событий, считается, что у этой группы есть занятия, название группы и URL сохранются в таблицу `Session`.
     4. Если миреа.ру не отвечает - повторяет запрос через час
     """
+    print("Процесс синхронизаций ссылок запущен")
     base_url = await get_link_with_current_hash()
     if not base_url:
         print("❌ Не могу получить данные групп, снова попробую через час")

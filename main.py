@@ -108,8 +108,6 @@ MARKDOWN_V2_SPECIAL_CHARS = r"_*[\]()~`>#+-=|{}.!"
 #                 [f"{key}: {value}" for key, value in info.items()]))
 
 
-
-
 def add_job_if_not_exists(job_tag, job_func, run_date):
     if not any(job.id == job_tag for job in scheduler.get_jobs()):
         scheduler.add_job(
@@ -117,6 +115,7 @@ def add_job_if_not_exists(job_tag, job_func, run_date):
             "date",
             run_date=run_date,
             kwargs={
+                "year": run_date.year,
                 "month": run_date.month,
                 "date": run_date.day,
                 "hour": run_date.hour,
@@ -246,7 +245,7 @@ async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
                 )
 
 
-async def dindin(month: int, date: int, hour: int, minute: int):
+async def dindin(year: int, month: int, date: int, hour: int, minute: int):
     """
     Фф-я для обработки начала занятия.
     - Вызывается по расписанию в указанное время. Устраивает спам-рассылку с очередью.
@@ -254,8 +253,8 @@ async def dindin(month: int, date: int, hour: int, minute: int):
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                "SELECT Id, GroupName, Task FROM Timetable WHERE Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?",
-                (month, date, hour, minute),
+                "SELECT Id, GroupName, Task FROM Timetable WHERE Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ?",
+                (year, month, date, hour, minute),
             )
             _class = await cursor.fetchall()
             await conn.commit()
@@ -425,7 +424,7 @@ async def query_handler_reg(call: CallbackQuery):
                 return await call.answer("Используйте «Сдать»!", show_alert=True)
             # Получение данных о занятии
             await cursor.execute(
-                "SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
+                "SELECT Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable "
                 "WHERE Id = ?",
                 (_class_id,),
             )
@@ -433,12 +432,13 @@ async def query_handler_reg(call: CallbackQuery):
             # print(call.message.chat.id, call.message.message_id, call.from_user.id)
             result = await handle_subject_uni(
                 call.from_user.id,
-                _class_data[5],
+                _class_data[6],
                 _class_data[0],
                 _class_data[1],
                 _class_data[2],
                 _class_data[3],
                 _class_data[4],
+                _class_data[5],
             )
             await triggerlistupdate(
                 call.message.chat.id, call.message.message_id, call.from_user.id
@@ -452,6 +452,7 @@ async def handle_pass(message: Message):
     """Обрабатывает процесс сдачи пользователя в личных сообщениях (не через группу)"""
     user_id = message.from_user.id
     current_time = datetime.now()
+    current_year = current_time.year
     current_month = current_time.month
     current_day = current_time.day
     current_hour = current_time.hour
@@ -462,37 +463,33 @@ async def handle_pass(message: Message):
             groupname = (await cursor.fetchone())[0]
             await cursor.execute(
                 """
-                SELECT Id
+                SELECT Id, Task, TeacherFIO, Location
                 FROM Timetable
-                WHERE (Start_Month < ? OR (Start_Month = ? AND Start_Day < ?)
-                    OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?)
-                    OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?))
-                    AND (End_Month > ? OR (End_Month = ? AND End_Day > ?)
-                    OR (End_Month = ? AND End_Day = ? AND End_Hour > ?)
-                    OR (End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute >= ?))
-                    AND GroupName = ?
+                WHERE 
+                     (Start_Year < ? OR 
+                     (Start_Year = ? AND Start_Month < ?) OR
+                     (Start_Year = ? AND Start_Month = ? AND Start_Day < ?) OR
+                     (Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR
+                     (Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?))
+                AND 
+                     (End_Year > ? OR
+                     (End_Year = ? AND End_Month > ?) OR
+                     (End_Year = ? AND End_Month = ? AND End_Day > ?) OR
+                     (End_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour > ?) OR
+                     (End_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute >= ?))
+                AND GroupName = ?
                 """,
                 (
-                    current_month,
-                    current_month,
-                    current_day,
-                    current_month,
-                    current_day,
-                    current_hour,
-                    current_month,
-                    current_day,
-                    current_hour,
-                    current_minute,
-                    current_month,
-                    current_month,
-                    current_day,
-                    current_month,
-                    current_day,
-                    current_hour,
-                    current_month,
-                    current_day,
-                    current_hour,
-                    current_minute,
+                    current_year,
+                    current_year, current_month,
+                    current_year, current_month, current_day,
+                    current_year, current_month, current_day, current_hour,
+                    current_year, current_month, current_day, current_hour, current_minute,
+                    current_year,
+                    current_year, current_month,
+                    current_year, current_month, current_day,
+                    current_year, current_month, current_day, current_hour,
+                    current_year, current_month, current_day, current_hour, current_minute,
                     groupname,
                 ),
             )
@@ -525,7 +522,7 @@ async def handle_pass(message: Message):
     return await message.answer("Мы не нашли вас в очереди!")
 
 
-async def dandalan(month: int, date: int, hour: int, minute: int):
+async def dandalan(year: int, month: int, date: int, hour: int, minute: int):
     """
     Функция для обработки окончания занятия.
     Вызывается в конце занятия.
@@ -534,9 +531,9 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                "SELECT GroupName, Id, message_id FROM Timetable WHERE End_Month = ? AND End_Day = ?"
+                "SELECT GroupName, Id, message_id FROM Timetable WHERE End_Year = ? AND End_Month = ? AND End_Day = ?"
                 "AND End_Hour = ? AND End_Minute = ?",
-                (month, date, hour, minute),
+                (year, month, date, hour, minute),
             )
             _class = await cursor.fetchall()
             for group_name, _, message_id in _class:
@@ -568,8 +565,8 @@ async def dandalan(month: int, date: int, hour: int, minute: int):
                             f"{chat_id[0]} - {message_id} (не удалось удалить)"
                         )  # игнорируем ошибку
             await cursor.execute(
-                "DELETE FROM Timetable WHERE End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
-                (month, date, hour, minute),
+                "DELETE FROM Timetable WHERE End_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute = ?",
+                (year, month, date, hour, minute),
             )
             await conn.commit()
 
@@ -584,28 +581,41 @@ async def delete_old_sessions():  # удалить просроченное (н�
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
             current_date = datetime.now()
-            hour, minute, day, month = (
+            hour, minute, day, month, year = (
                 current_date.hour,
                 current_date.minute,
                 current_date.day,
                 current_date.month,
+                current_date.year,
             )
             # Получаем пары, которые уже начались
             await cursor.execute(
-                """SELECT DISTINCT End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
-            WHERE Start_Month < ? OR (Start_Month = ? AND Start_Day < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour < ?) OR (Start_Month = ? AND Start_Day = ? AND Start_Hour = ? AND Start_Minute <= ?)""",
-                (month, month, day, month, day, hour, month, day, hour, minute),
+                """SELECT DISTINCT END_Year, End_Month, End_Day, End_Hour, End_Minute FROM Timetable 
+                WHERE 
+                (END_Year < ?) OR 
+                    (END_Year = ? AND End_Month < ?) OR 
+                    (END_Year = ? AND End_Month = ? AND End_Day < ?) OR 
+                    (END_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour < ?) OR 
+                    (END_Year = ? AND End_Month = ? AND End_Day = ? AND End_Hour = ? AND End_Minute <= ?)
+                """,
+                (
+                    year,
+                    year, month,
+                    year, month, day,
+                    year, month, day, hour,
+                    year, month, day, hour, minute
+                ),
             )
             result = await cursor.fetchall()
-            for end_month, end_day, end_hour, end_minute in result:
+            for end_year, end_month, end_day, end_hour, end_minute in result:
                 end_datetime = datetime(
-                    current_date.year, end_month, end_day, end_hour, end_minute
+                    end_year, end_month, end_day, end_hour, end_minute
                 )
                 if current_date >= end_datetime:
-                    await dandalan(end_month, end_day, end_hour, end_minute)
+                    await dandalan(end_year, end_month, end_day, end_hour, end_minute)
                 else:
                     add_job_if_not_exists(
-                        f"end_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}",
+                        f"end_{end_year:02d}_{end_month:02d}_{end_day:02d}_{end_hour:02d}_{end_minute:02d}",
                         dandalan,
                         end_datetime,
                     )
@@ -643,7 +653,7 @@ def generate_calendar(raspisanie):  # Функция для генерации �
 
 async def generatescheduler_to_currect_day():  # установка будильников на текущий день
     """
-    Устанавливает будильники (запланированные задачи) на текущий день, используя расписание из базы данных.
+    Устанавливает запланированные задачи на текущий день, используя расписание из базы данных.
     - Подключается к базе данных и получает время запланированных событий.
     - Проверяет, существуют ли уже задачи с таким временем.
     - Если задачи нет, создаёт две задачи:
@@ -655,13 +665,13 @@ async def generatescheduler_to_currect_day():  # установка будиль
             current_date = datetime.now()
             await cursor.execute(
                 "SELECT DISTINCT Start_Hour, Start_Minute FROM Timetable "
-                "WHERE Start_Month = ? AND Start_Day = ?",
-                (current_date.month, current_date.day),
+                "WHERE Start_Year = ? AND Start_Month = ? AND Start_Day = ?",
+                (current_date.year, current_date.month, current_date.day),
             )
             start_hour_minute = await cursor.fetchall()
             await cursor.execute(
-                "SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Month = ? AND Start_Day = ?",
-                (current_date.month, current_date.day),
+                "SELECT DISTINCT End_Hour, End_Minute FROM Timetable WHERE Start_Year = ? AND Start_Month = ? AND Start_Day = ?",
+                (current_date.year, current_date.month, current_date.day),
             )
             end_hour_minute = await cursor.fetchall()
     for start_hour, start_minute in start_hour_minute:
@@ -673,7 +683,7 @@ async def generatescheduler_to_currect_day():  # установка будиль
             start_minute,
         )
         add_job_if_not_exists(
-            f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}",
+            f"start_{start_date.year}_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}",
             dindin,
             start_date,
         )
@@ -686,7 +696,7 @@ async def generatescheduler_to_currect_day():  # установка будиль
             end_minute,
         )
         add_job_if_not_exists(
-            f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}",
+            f"end_{end_date.year}{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}",
             dandalan,
             end_date,
         )
@@ -887,7 +897,7 @@ async def statistic(message: Message) -> None:
         else:
             results.append(
                 f"{index}. {actual_position} место в очереди, {start_time} - {end_time}\n"
-                f"«{subject}», проходит в «{location}». ЭТА ПАРА СОЗДАНА ИСКУСТВЕННО"
+                f"«{subject}», проходит в «{location}». ЭТА ПАРА СОЗДАНА ИСКУСТВЕННО."
             )
     if count:
         results.append(
@@ -898,6 +908,15 @@ async def statistic(message: Message) -> None:
 
 
 """friren actually is useful
+friren important
+friren helpful
+friren nice
+friren amazing
+friren incredible
+friren stunning
+friren breathtaking
+friren extraordinary
+friren impressive
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣯⣫⣡⡿⡵⣫⣾⣿⡿⣋⣥⣶⣷⣾⣿⣿⣵⣦⣌⠻⣿⣿⣿⣿⣷⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢷⠝⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠯⢱⣫⢗⡞⢕⣿⣿⢿⣾⣿⣿⣿⣿⢿⣿⣿⣿⣿⣿⣿⣜⣿⡽⣿⣿⣷⣿⣿⣿⣿⣿⣷⣹⣿⣟⢿⣿⣿⣿⣯⣇⡸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⢠⣏⡟⢟⡾⣾⣿⢳⣿⡿⣷⣿⡿⡫⣾⣿⢿⣿⣿⣿⣿⣿⢻⣿⢿⣿⣿⣧⢿⣿⣿⣿⣿⣯⣿⣿⢸⣿⣿⣿⣇⡘⡽⣌⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
@@ -1093,22 +1112,22 @@ async def show_schedule(callback: CallbackQuery):
             groupname = (await cursor.fetchone())[0]
             await cursor.execute(
                 """
-                SELECT Task, Start_Month, Start_Day, Start_Hour, Start_Minute, Location 
+                SELECT Task, Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, Location 
                 FROM Timetable 
-                WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
+                WHERE GroupName = ? AND Start_Year = ? AND Start_Month = ? AND Start_Day = ?
                 """,
-                (groupname, selected_date.split("-")[1], selected_date.split("-")[2]),
+                (groupname, selected_date.split("-")[0], selected_date.split("-")[1], selected_date.split("-")[2]),
             )
             subjects = await cursor.fetchall()
     keyboard = []
     for subject in subjects:
-        task, month, day, hour, minute, location = subject
+        task, year, month, day, hour, minute, location = subject
         text = (
-            f"{location} {str(hour).rjust(2, '0')}:{str(minute).rjust(2, '0')} - {task}"
+            f"{hour:02d}:{minute:02d} «{task}»"
         )
         button = InlineKeyboardButton(
-            text=text[0:60],
-            callback_data=f"subject_{month}_{day}_{hour}_{minute}_{location}_{groupname}",
+            text=text,
+            callback_data=f"subject_{year}_{month}_{day}_{hour}_{minute}_{location}_{groupname}",
         )
         keyboard.append([button])
     keyboard.append(
@@ -1129,6 +1148,7 @@ async def show_schedule(callback: CallbackQuery):
 async def handle_subject_uni(
     user_id: int,
     groupname: str,
+    year: str,
     month: str,
     day: str,
     hour: str,
@@ -1146,9 +1166,9 @@ async def handle_subject_uni(
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                "SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Month = ? "
+                "SELECT Id FROM Timetable WHERE GroupName = ? AND Start_Year = ? AND Start_Month = ? "
                 "AND Start_Day = ? AND Start_Hour = ? AND Start_Minute = ? AND Location = ?",
-                (groupname, month, day, hour, minute, location),
+                (groupname, year, month, day, hour, minute, location),
             )
             numseance = (await cursor.fetchone())[0]
 
@@ -1195,7 +1215,7 @@ async def handle_subject_uni(
             queue_position = (await cursor.fetchone())[0]
             current_time = datetime.now()
             if queue_position == 1 and current_time >= datetime(
-                current_time.year, int(month), int(day), int(hour), int(minute)
+                int(year), int(month), int(day), int(hour), int(minute)
             ):
                 await lighttriggerlistupdate(numseance)
             return f"Успешно! Ваш номер в очереди: {queue_position}"
@@ -1204,10 +1224,10 @@ async def handle_subject_uni(
 @dp.callback_query(F.data.startswith("subject_"))  # Обработчик выбора предмета
 async def handle_subject(callback: CallbackQuery):
     """call-back запрос для обработки выбора предмета."""
-    _, month, day, hour, minute, location, groupname = callback.data.split("_")
+    _, year, month, day, hour, minute, location, groupname = callback.data.split("_")
     user_id = callback.from_user.id
     message = await handle_subject_uni(
-        user_id, groupname, month, day, hour, minute, location
+        user_id, groupname, year, month, day, hour, minute, location
     )
     return await callback.answer(message)
 
@@ -1441,7 +1461,7 @@ async def process_location(message: types.Message, state: FSMContext):
     - Если в группе пользователя нет пересечений занятий, добавляет новое занятие в базу данных
     - Добавляет временные слоты (если раньше слотов с таким id не было)
     """
-    await state.update_data(location=message.text.strip()[:14].replace("_", "-"))
+    await state.update_data(location=message.text.strip().capitalize()[:14].replace("_", "-"))
     data = await state.get_data()
     groupname, title = data["groupname"], data["title"]
     location, start_date, end_date = data["location"], data["start"], data["end"]
@@ -1453,19 +1473,34 @@ async def process_location(message: types.Message, state: FSMContext):
         return
     async with aiosqlite.connect(DATABASE_NAME) as conn:
         async with conn.cursor() as cursor:
-            new_start_minutes = start_date.hour * 60 + start_date.minute
-            new_end_minutes = end_date.hour * 60 + end_date.minute
+            duration_start_minutes = start_date.hour * 60 + start_date.minute
+            duration_end_minutes = end_date.hour * 60 + end_date.minute
+            # Проверяем ВСЕ возможные пересечения по времени
             await cursor.execute(
-                """SELECT 1 FROM Timetable WHERE GroupName = ? AND Start_Month = ? AND Start_Day = ?
-                      AND End_Month = ? AND End_Day = ? AND ((Start_Hour * 60 + Start_Minute) < ? AND (End_Hour * 60 + End_Minute) > ?)""",
+                """SELECT 1 FROM Timetable 
+                WHERE GroupName = ? 
+                AND (
+                    (Start_Year = ? AND Start_Month = ? AND Start_Day = ?)
+                    OR
+                    (End_Year = ? AND End_Month = ? AND End_Day = ?)
+                    OR
+                    (Start_Year <= ? AND Start_Month <= ? AND Start_Day <= ? 
+                     AND End_Year >= ? AND End_Month >= ? AND End_Day >= ?)
+                )
+                AND NOT (
+                    (? >= (End_Hour * 60 + End_Minute))
+                    OR
+                    (? <= (Start_Hour * 60 + Start_Minute))
+                )
+                """,
                 (
                     groupname,
-                    start_date.month,
-                    start_date.day,
-                    end_date.month,
-                    end_date.day,
-                    new_end_minutes,
-                    new_start_minutes,
+                    start_date.year, start_date.month, start_date.day,
+                    end_date.year, end_date.month, end_date.day,
+                    start_date.year, start_date.month, start_date.day,
+                    end_date.year, end_date.month, end_date.day,
+                    duration_start_minutes,
+                    duration_end_minutes,
                 ),
             )
             conflict_pair = await cursor.fetchone()
@@ -1477,17 +1512,19 @@ async def process_location(message: types.Message, state: FSMContext):
                 await state.clear()
                 return
             await cursor.execute(
-                """INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Month, Start_Day, 
-            Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO Timetable (GroupName, TeacherFIO, Task, Start_Year, Start_Month, Start_Day, 
+            Start_Hour, Start_Minute, End_Year, End_Month, End_Day, End_Hour, End_Minute, location) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     groupname,
                     "Someone",
                     title,
+                    start_date.year,
                     start_date.month,
                     start_date.day,
                     start_date.hour,
                     start_date.minute,
+                    end_date.year,
                     end_date.month,
                     end_date.day,
                     end_date.hour,
@@ -1496,8 +1533,8 @@ async def process_location(message: types.Message, state: FSMContext):
                 ),
             )
             await conn.commit()
-    start_tag = f"start_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}"
-    end_tag = f"end_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}"
+    start_tag = f"start_{start_date.year}_{start_date.month:02d}_{start_date.day:02d}_{start_date.hour:02d}_{start_date.minute:02d}"
+    end_tag = f"end_{end_date.year}_{end_date.month:02d}_{end_date.day:02d}_{end_date.hour:02d}_{end_date.minute:02d}"
     # Проверка: есть ли уже такие слоты в планировщике
     add_job_if_not_exists(start_tag, dindin, start_date)
     add_job_if_not_exists(end_tag, dandalan, end_date)
@@ -1621,7 +1658,7 @@ async def main_async() -> None:  # Run the bot
     - `create`: создаёт таблицы в базе данных (и саму базу), если они не существуют.
     - `delete_old_sessions`: удаляет старые сессии.
     - `refresh_schedule`: обновляет расписание.
-    - `generatescheduler_to_currect_day`: генерирует будильники на текущий день.
+    - `generatescheduler_to_currect_day`: генерирует расписание на текущий день.
     - Регулярные задачи:
     - Обновление расписания каждое воскресенье в 00:30.
     - Генерация правильных ссылок 1 сентября в 00:30 и 2 февраля в 00:30. Вторая делается из расчёта на то, что 4 курс второго семестра не имеет расписания.
@@ -1650,7 +1687,7 @@ async def main_async() -> None:  # Run the bot
     bd = create()
     await refresh_schedule()
     await delete_old_sessions()
-    # await form_correctslinks(depth_search, scheduler, bot) # для моментального перезапуска всего
+    await form_correctslinks(depth_search, scheduler, bot) # для моментального перезапуска всего
     if bd:
         await form_correctslinksstep_two(depth_search, scheduler)
     await generatescheduler_to_currect_day()  # начальные три действия
@@ -1667,6 +1704,15 @@ async def main_async() -> None:  # Run the bot
     scheduler.add_job(
         generatescheduler_to_currect_day, trigger="cron", hour=7, minute=30
     )
+    scheduler.add_job(
+        form_correctslinks,
+        "cron",
+        month=2,
+        day=1,
+        hour=0,
+        minute=30,
+        kwargs={"stop": depth_search, "scheduler": scheduler, "bot": bot},
+    )
 
     # scheduler.add_job(
     #     system_info,
@@ -1679,15 +1725,7 @@ async def main_async() -> None:  # Run the bot
     #     seconds=15
     # )
 
-    scheduler.add_job(
-        form_correctslinks,
-        "cron",
-        month=2,
-        day=1,
-        hour=0,
-        minute=30,
-        kwargs={"stop": depth_search, "scheduler": scheduler, "bot": bot},
-    )
+
     scheduler.start()
     await dp.start_polling(bot)
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from os import getenv
 import aiohttp
+from apscheduler.triggers import interval
 from icalendar import Calendar
 import aiosqlite
 from validation import get_link_with_current_hash
@@ -67,7 +68,7 @@ async def get_schedule(url, groupname):
     """
     Получает расписание для конкретной группы, парсит iCal контент и сохраняет его в базе данных.
     """
-    async with aiohttp.ClientSession() as session:
+    async with (aiohttp.ClientSession() as session):
         try:
             async with session.get(
                 url, timeout=aiohttp.ClientTimeout(total=5)
@@ -92,74 +93,40 @@ async def get_schedule(url, groupname):
                                     .replace("Преподаватель: ", "")
                                 )
                                 dtstart = component.get("dtstart").dt
+                                start_date = dtstart.replace(tzinfo=None)
                                 dtend = component.get("dtend").dt
+                                end_date = dtend.replace(tzinfo=None)
                                 summary = component.get("summary").replace("ПР ", "", 1)
                                 location = component.get("location").strip(
                                     "Дистанционно "
                                 )
-                                try:
+                                until = start_date
+                                exd = None
+                                interval = 0
+                                if summary.startswith("Э"):
+                                    summary = summary.replace("Э", "Экз", 1)
+                                reg_Detector = component.get("RRULE")
+                                if reg_Detector:
+                                    freq = reg_Detector.get("FREQ")[0]
+                                    daytoweek = 7 if freq == "WEEKLY" else 1
+                                    interval = reg_Detector.get("INTERVAL")[0] * daytoweek
+                                    until = reg_Detector.get("UNTIL")[0]
+                                    until = until.replace(tzinfo=None)
                                     exdate = component.get("exdate").dts
                                     exd = [
                                         i.dt.replace(tzinfo=None) for i in exdate
                                     ]  # список datetime исключений
-                                    await generate_schedule(
-                                        dtstart.replace(tzinfo=None),
-                                        dtend.replace(tzinfo=None),
-                                        summary,
-                                        teacher_fio,
-                                        location,
-                                        groupname,
-                                        exd,
-                                    )
-                                except AttributeError:
-                                    # сессия, детка
-                                    async with aiosqlite.connect(
-                                        getenv("DATABASE_NAME")
-                                    ) as conn:
-                                        async with conn.cursor() as cursor:
-                                            start_date = dtstart.replace(tzinfo=None)
-                                            end_date = dtend.replace(tzinfo=None)
-                                            # if summary.startswith("З"):
-                                            #     summary = summary.replace("З", "ЗАЧ")
-                                            if summary.startswith("Э"):
-                                                summary = summary.replace("Э", "ЭКЗ")
-                                            await cursor.execute(
-                                                """SELECT 1 FROM TIMETABLE WHERE GroupName = ?
-                                                                 AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ?
-                                                                 AND Start_Minute = ? AND LOCATION = ?""",
-                                                (
-                                                    groupname,
-                                                    teacher_fio,
-                                                    summary,
-                                                    start_date.month,
-                                                    start_date.day,
-                                                    start_date.hour,
-                                                    start_date.minute,
-                                                    location,
-                                                ),
-                                            )
-                                            exists = await cursor.fetchone()
-                                            if not exists:
-                                                await cursor.execute(
-                                                    """INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task,
-                                                                    Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location)
-                                                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                                                    (
-                                                        groupname,
-                                                        teacher_fio,
-                                                        summary,
-                                                        start_date.month,
-                                                        start_date.day,
-                                                        start_date.hour,
-                                                        start_date.minute,
-                                                        end_date.month,
-                                                        end_date.day,
-                                                        end_date.hour,
-                                                        end_date.minute,
-                                                        location,
-                                                    ),
-                                                )
-                                                await conn.commit()
+                                await generate_schedule(
+                                    start_date,
+                                    end_date,
+                                    summary,
+                                    teacher_fio,
+                                    location,
+                                    groupname,
+                                    until,
+                                    exd,
+                                    interval,
+                                )
                 else:
                     print(f"⚠ Ошибка {response.status} для {url}")
         except Exception as e:
@@ -167,8 +134,9 @@ async def get_schedule(url, groupname):
 
 
 async def generate_schedule(
-    start_date, end_date, description, teacher, location, groupname, exdate
-):  # Генерируем расписание на ближайшие две недели
+    start_date, end_date, description, teacher, location, groupname, until, exdate, interval
+):
+    # Генерируем расписание на ближайшие две недели
     """
     Генерирует расписание для указанной группы на ближайшие две недели.
     Эта функция выполняет следующие шаги:
@@ -183,30 +151,27 @@ async def generate_schedule(
     4) teacher: ФИО преподавателя;
     5) location: Местоположение занятия;
     6) groupname: Название группы;
-    7) exdate: Список дат исключений.
+    7) until: Дата окончания регулярных пар.
+    8) exdate: Список дат исключений.
+    9) interval: Интервал в днях для повторяющихся событий.
     """
+    if exdate is None:
+        exdate = []
     current_date = datetime.now()
-    if 2 <= current_date.month <= 7:  # весенний семестр
-        end_of_semester = datetime(current_date.year, 7, 10)
-    else:  # зимний семестр
-        if current_date.month >= 8:
-            end_of_semester = datetime(current_date.year + 1, 2, 4)
-        else:
-            end_of_semester = datetime(current_date.year, 2, 4)
-    # print(end_of_semester)
     end_date += timedelta(minutes=peremen_minutes)
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
-            while start_date <= end_of_semester:
+            while start_date <= until:
                 if current_date <= start_date:
                     await cursor.execute(
                         """SELECT 1 FROM TIMETABLE WHERE GroupName = ?
-                     AND TeacherFIO = ? AND Task = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? 
+                     AND TeacherFIO = ? AND Task = ? AND Start_Year = ? AND Start_Month = ? AND Start_Day = ? AND Start_Hour = ? 
                      AND Start_Minute = ? AND LOCATION = ?""",
                         (
                             groupname,
                             teacher,
                             description,
+                            start_date.year,
                             start_date.month,
                             start_date.day,
                             start_date.hour,
@@ -217,17 +182,19 @@ async def generate_schedule(
                     exists = await cursor.fetchone()
                     if not exists and start_date not in exdate:
                         await cursor.execute(
-                            """INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, 
-                        Start_Month, Start_Day, Start_Hour, Start_Minute, End_Month, End_Day, End_Hour, End_Minute, location) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            """INSERT INTO TIMETABLE (GroupName, TeacherFIO, Task, Start_Year,
+                        Start_Month, Start_Day, Start_Hour, Start_Minute, End_Year, End_Month, End_Day, End_Hour, End_Minute, location) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                             (
                                 groupname,
                                 teacher,
                                 description,
+                                start_date.year,
                                 start_date.month,
                                 start_date.day,
                                 start_date.hour,
                                 start_date.minute,
+                                end_date.year,
                                 end_date.month,
                                 end_date.day,
                                 end_date.hour,
@@ -236,7 +203,8 @@ async def generate_schedule(
                             ),
                         )
                         await conn.commit()
+                if interval == 0: # ОДНОРАЗОВОЕ СОБЫТИЕ (ЭКЗАМЕН/ЗАЧ/КОНС)
                     break
-                # Добавляем 2 недели (интервал)
-                start_date += timedelta(weeks=2)
-                end_date += timedelta(weeks=2)
+                # Добавляем x дней (интервал)
+                start_date += timedelta(days=interval)
+                end_date += timedelta(days=interval)
