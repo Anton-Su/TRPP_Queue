@@ -380,19 +380,20 @@ async def query_handler_pass(call: CallbackQuery):
                 )
             # Получение данных о занятии
             await cursor.execute(
-                "SELECT Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?",
+                "SELECT Start_Year, Start_Month, Start_Day, Start_Hour, Start_Minute, Location, GroupName FROM Timetable WHERE Id = ?",
                 (_class_id,),
             )
             _class_data = (await cursor.fetchall())[0]
             # print(call.message.chat.id, call.message.message_id, 1)
             await handle_subject_uni(
                 call.from_user.id,
-                _class_data[5],
+                _class_data[6],
                 _class_data[0],
                 _class_data[1],
                 _class_data[2],
                 _class_data[3],
                 _class_data[4],
+                _class_data[5],
             )
             await triggerlistupdate(call.message.chat.id, call.message.message_id, 1)
     await bot.send_message(
