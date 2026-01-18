@@ -197,16 +197,16 @@ async def triggerlistupdate(chat_id: int, message_id: int, personality_id: int):
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
+                            text="Сдать",
+                            callback_data=f"query_handler_pass_{_class[0]}",
+                        ),
+                        InlineKeyboardButton(
                             text="За(от)писаться",
                             callback_data=f"query_handler_reg_{_class[0]}",
                         ),
                         InlineKeyboardButton(
                             text="Поменяться",
                             callback_data=f"query_ustuply_pass_{_class[0]}",
-                        ),
-                        InlineKeyboardButton(
-                            text="Сдать",
-                            callback_data=f"query_handler_pass_{_class[0]}",
                         ),
                     ]
                 ]
