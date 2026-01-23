@@ -1,21 +1,18 @@
-from datetime import datetime, timedelta
-from os import getenv
 import json
-from icalendar import Calendar
 import aiohttp
 import aiosqlite
 
+from datetime import datetime, timedelta
+from os import getenv
+from icalendar import Calendar
 from bs4 import BeautifulSoup
-
-
-# output_file = "valid_schedules.txt" # на случай сохранения в файле
-# base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
 
 
 async def get_link_with_current_hash():
     """
     Получает действительную базовую ссылку на расписание с текущим хэшем.
     """
+    # base_url = "https://schedule-of.mirea.ru/_next/data/PuqjJjkncpbeEq4Xieazm/index.json?s=1_"
     url = "https://schedule-of.mirea.ru/"
     try:
         async with aiohttp.ClientSession() as session:
@@ -31,8 +28,7 @@ async def get_link_with_current_hash():
         return None
 
 
-async def form_correctslinks(stop, scheduler, bot):
-    print("Процесс удаления соединений запущен")
+async def form_correct_links(stop, scheduler, bot):
     """
     Очищает базу данных (асинхронная версия с aiosqlite).
     Функция выполняет следующие действия:
@@ -62,10 +58,10 @@ async def form_correctslinks(stop, scheduler, bot):
             await cursor.execute("DELETE FROM Timetable;")
             await cursor.execute("DELETE FROM GroupCreaters;")
             await conn.commit()
-    return await form_correctslinksstep_two(stop, scheduler)
+    return await form_correct_links_step_two(stop, scheduler)
 
 
-async def form_correctslinksstep_two(stop, scheduler):
+async def form_correct_links_step_two(stop, scheduler):
     """
     Формирует правильные ссылки и записывает данные о группах и расписаниях в базу данных.
     Функция выполняет следующие действия:
@@ -79,7 +75,7 @@ async def form_correctslinksstep_two(stop, scheduler):
     if not base_url:
         print("❌ Не могу получить данные групп, снова попробую через час")
         scheduler.add_job(
-            form_correctslinksstep_two,
+            form_correct_links_step_two,
             "date",
             run_date=datetime.now() + timedelta(minutes=60),
             kwargs={"stop": stop, "scheduler": scheduler},
@@ -100,9 +96,9 @@ async def form_correctslinksstep_two(stop, scheduler):
                                 if schedule_info:
                                     group = schedule_info[0]["title"]
                                     schedule = schedule_info[0]["iCalContent"]
-                                    realschedule = Calendar.from_ical(schedule)
+                                    real_schedule = Calendar.from_ical(schedule)
                                     if (
-                                        len(realschedule.walk()) > 5
+                                        len(real_schedule.walk()) > 5
                                     ):  # расписание реально дано
                                         await cursor.execute(
                                             "INSERT INTO Session (GroupName, Url) VALUES (?, ?)",

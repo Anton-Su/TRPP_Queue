@@ -1,17 +1,12 @@
 import sqlite3
 import os
 
-# from dotenv import load_dotenv
-#
-# load_dotenv()
-
-
 def create():
     """Создает базу данных SQLite и необходимые таблицы."""
     db_name = os.getenv("DATABASE_NAME")
     if os.path.exists(db_name):
         return False
-    print(f"Используется база данных с названием «{db_name}»")
+    print(f"Создаётся база данных «{db_name}»")
     conn = sqlite3.connect(db_name)
     cursor = conn.cursor()
     cursor.execute(
@@ -76,4 +71,5 @@ def create():
     )
     conn.commit()
     conn.close()
+    print(f"База данных «{db_name}» создана")
     return True
