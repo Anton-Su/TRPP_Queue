@@ -64,7 +64,7 @@ kbPass = ReplyKeyboardMarkup(  # Создаем кнопку, на котору�
     resize_keyboard=True,
     one_time_keyboard=True,
 )
-kbCreateGroup = ReplyKeyboardMarkup(  # Создаем кнопку, которая для
+kbCreateGroup = ReplyKeyboardMarkup(  # Создаем кнопку, которая предлагается в случае прерывания процесса создания пары
     keyboard=[[KeyboardButton(text="Помощь"), KeyboardButton(text="Создать")]],
     resize_keyboard=True,
     one_time_keyboard=False,
