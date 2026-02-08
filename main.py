@@ -1338,7 +1338,7 @@ async def show_calendar(
                 return await callback.answer("Вы не зарегистрированы!", show_alert=True)
             await cursor.execute(
                 "SELECT DISTINCT Start_Year, Start_Month, Start_Day FROM Timetable "
-                "WHERE GroupName = ? ORDER BY Start_Year, Start_Month, Start_Day",
+                "WHERE GroupName = ? ORDER BY Start_Year, Start_Month, Start_Day LIMIT 9",
                 (group[0],),
             )
             raspisanie = await cursor.fetchall()

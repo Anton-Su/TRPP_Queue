@@ -12,4 +12,4 @@
 /queue.db-journal
 /justincase
 /setup.py
-queue.db
+data/queue.db

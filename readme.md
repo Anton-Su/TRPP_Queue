@@ -65,7 +65,7 @@
    pip install -r requirements.txt
    ```
 
-5. Обратите внимание на файл `queue.db`. Он содержит данные, актуальные до зимы 2026 года. Если вы запускаете проект позже этого срока, рекомендуется на шаге 7 не использовать готовый `queue.db` (или удалить его) — при необходимости будет автоматически создан новый файл SQLite. После первоначального запуска может пройти до часа (время, необходимое для сбора данных с mirea.ru при первой настройке), прежде чем бот начнёт полноценно работать (шаг 9). Но обычно бот начинает работу минут через пять.
+5. Обратите внимание на файл `queue.db`, находящийся в папке data. Он содержит данные, актуальные до лета 2026 года. Если вы запускаете проект позже этого срока, рекомендуется на шаге 7 не использовать готовый `queue.db` (или удалить его) — при необходимости будет автоматически создан новый файл SQLite. После первоначального запуска может пройти до часа (время, необходимое для сбора данных с mirea.ru при первой настройке), прежде чем бот начнёт полноценно работать (шаг 9). Но обычно бот начинает работу минут через пять.
 
 6. Создайте бота в Telegram через [BotFather](https://t.me/botfather) и получите токен бота. Следуйте подсказкам BotFather для создания нового бота и получения токена.
 
@@ -173,7 +173,7 @@ Additionally, the following built-in libraries are used:
    pip install -r requirements.txt
    ```
 
-5. Look at the queue.db file. It contains data that are relevant until winter 2026. So if you are from the future, I recommend you in step 7 not to chose queue.db (or just delete it) - instead you will auto create an SQLite database file. After 1 hour (time that require to collect data in mirea.ru in the first setup) or something, the bot starts working (step 9). But usually, the bot starts working in 5 minutes.
+5. Look at the queue.db file located in data directory. It contains data that are relevant until summer 2026. So if you are from the future, I recommend you in step 7 not to chose queue.db (or just delete it) - instead you will auto create an SQLite database file. After 1 hour (time that require to collect data in mirea.ru in the first setup) or something, the bot starts working (step 9). But usually, the bot starts working in 5 minutes.
 
 6. Create a bot on Telegram by talking to the [BotFather](https://t.me/botfather) and get your bot token. Follow the instructions provided by BotFather to create a new bot and obtain the token.
 

@@ -136,13 +136,12 @@ async def get_schedule(url, group_name):
 async def generate_schedule(
     start_time, end_time, description, teacher, location, group_name, until, ex_date, interval
 ):
-    # Генерируем расписание на ближайшие две недели
+    # Генерируем расписание на ближайшие девять дней
     """
     Генерирует расписание для указанной группы на ближайшие две недели.
     Эта функция выполняет следующие шаги:
-    1. Рассчитывает конечную дату семестра (май или февраль).
-    2. Проверяет, если дата мероприятия находится после текущей даты.
-    3. Вставляет события в базу данных, если их еще нет, исключая даты из списка `exdate`.
+    1. Проверяет, если дата мероприятия находится после текущей даты.
+    2. Вставляет события в базу данных, если их еще нет, исключая даты из списка `exdate`.
 
     Параметры:
     1) start_time: Начальная дата для создания расписания;
@@ -161,7 +160,7 @@ async def generate_schedule(
     end_time += timedelta(minutes=peremen_minutes)
     async with aiosqlite.connect(getenv("DATABASE_NAME")) as conn:
         async with conn.cursor() as cursor:
-            while start_time <= until:
+            while start_time <= until and start_time.date() <= datetime.now().date() + timedelta(days=9):
                 if current_date <= start_time:
                     await cursor.execute(
                         """SELECT 1 FROM TIMETABLE WHERE GroupName = ?
